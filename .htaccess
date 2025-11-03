@@ -1,0 +1,3 @@
+PassengerEnabled on
+PassengerAppRoot /home2/nova/novacool_rag
+PassengerPython /home2/nova/novacool_rag/venv/bin/python3
