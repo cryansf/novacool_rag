@@ -1,14 +1,12 @@
 # app_flask.py — Novacool's Assistant (Flask on Render)
 # - Full-page chat UI (/widget)
-# - Drag & drop uploader (/admin/uploader) -> POST /upload
-# - Workflow dashboard (/admin/status)
-# - Reindex button (/reindex) to (re)embed files in /data/uploads
-# - Ask endpoint (/ask) using OpenAI (no openai package required)
+# - Admin uploader (/admin/uploader) with Upload, Reindex, Crawl, and Progress Bar
 # - Vector store: ./data/vecs.npy + ./data/meta.jsonl
+# - Uses OpenAI for embeddings + chat
 
 import os, io, re, json, time, uuid, pathlib, urllib.parse, queue
-from typing import List, Dict, Any, Optional
-from flask import Flask, request, jsonify, Response, render_template, send_from_directory
+from typing import List, Dict, Any
+from flask import Flask, request, jsonify, Response, render_template, send_from_directory, stream_with_context
 import requests
 import numpy as np
 from bs4 import BeautifulSoup
@@ -18,15 +16,13 @@ APP_TITLE = "Novacool’s Assistant"
 DATA_DIR = "data"
 UPLOAD_DIR = f"{DATA_DIR}/uploads"
 META_PATH = f"{DATA_DIR}/meta.jsonl"
-VEC_PATH  = f"{DATA_DIR}/vecs.npy"
+VEC_PATH = f"{DATA_DIR}/vecs.npy"
 
-EMBED_MODEL = "text-embedding-3-small"   # 1536 dims
-CHAT_MODEL  = "gpt-4o-mini"
+EMBED_MODEL = "text-embedding-3-small" # 1536 dims
+CHAT_MODEL = "gpt-4o-mini"
 TOP_K = 5
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 150
-
-HOST_WHITELIST = [d.strip().lower() for d in os.getenv("HOST_DOMAIN_WHITELIST","novacool.com").split(",") if d.strip()]
 USER_AGENT = "Novacool-RAG/1.0"
 
 os.makedirs(DATA_DIR, exist_ok=True)
@@ -40,17 +36,20 @@ def normspace(s: str) -> str:
 
 def chunk_text(text: str, size=CHUNK_SIZE, overlap=CHUNK_OVERLAP) -> List[str]:
     t = normspace(text)
-    if not t: return []
+    if not t:
+        return []
     out, start, L = [], 0, len(t)
     while start < L:
         end = min(L, start + size)
         out.append(t[start:end])
-        if end == L: break
+        if end == L:
+            break
         start = max(0, end - overlap)
     return out
 
 def load_meta() -> List[Dict[str, Any]]:
-    if not os.path.exists(META_PATH): return []
+    if not os.path.exists(META_PATH):
+        return []
     with open(META_PATH, "r", encoding="utf-8") as f:
         return [json.loads(line) for line in f]
 
@@ -60,7 +59,8 @@ def save_meta(metas: List[Dict[str, Any]]):
             f.write(json.dumps(m, ensure_ascii=False) + "\n")
 
 def load_vecs() -> np.ndarray:
-    if not os.path.exists(VEC_PATH): return np.zeros((0, 1536), dtype=np.float32)
+    if not os.path.exists(VEC_PATH):
+        return np.zeros((0, 1536), dtype=np.float32)
     return np.load(VEC_PATH)
 
 def save_vecs(arr: np.ndarray):
@@ -79,14 +79,16 @@ def openai_embeddings(texts: List[str]) -> np.ndarray:
     return (arr / norms).astype(np.float32)
 
 def add_chunks(chunks: List[Dict[str, Any]]) -> int:
-    if not chunks: return 0
+    if not chunks:
+        return 0
     texts = [c["text"] for c in chunks]
     vecs_new = openai_embeddings(texts)
     vecs_old = load_vecs()
     vecs = vecs_new if vecs_old.shape[0] == 0 else np.vstack([vecs_old, vecs_new])
     save_vecs(vecs)
     metas = load_meta()
-    for c in chunks: c["id"] = str(uuid.uuid4())
+    for c in chunks:
+        c["id"] = str(uuid.uuid4())
     metas.extend(chunks)
     save_meta(metas)
     return len(chunks)
@@ -94,7 +96,8 @@ def add_chunks(chunks: List[Dict[str, Any]]) -> int:
 def search(query: str, k: int = TOP_K) -> List[Dict[str, Any]]:
     vecs = load_vecs()
     metas = load_meta()
-    if vecs.shape[0] == 0: return []
+    if vecs.shape[0] == 0:
+        return []
     qv = openai_embeddings([query])[0:1]
     sims = (vecs @ qv.T).reshape(-1)
     idx = np.argsort(-sims)[:min(k, vecs.shape[0])]
@@ -121,7 +124,7 @@ def call_llm(question: str, ctx_blocks: List[str], cites: List[str]) -> str:
         "model": CHAT_MODEL,
         "messages": [
             {"role": "system", "content": "Precise, cite sources, no hallucinations."},
-            {"role": "user",    "content": prompt}
+            {"role": "user", "content": prompt}
         ],
         "temperature": 0.2
     }
@@ -135,6 +138,7 @@ def call_llm(question: str, ctx_blocks: List[str], cites: List[str]) -> str:
 def ext(path: str) -> str:
     return pathlib.Path(path).suffix.lower()
 
+# ---------- Parsers ----------
 def parse_pdf(bytes_blob: bytes) -> str:
     try:
         from pypdf import PdfReader
@@ -143,8 +147,10 @@ def parse_pdf(bytes_blob: bytes) -> str:
     r = PdfReader(io.BytesIO(bytes_blob))
     out = []
     for p in r.pages:
-        try: out.append(normspace(p.extract_text() or ""))
-        except Exception: out.append("")
+        try:
+            out.append(normspace(p.extract_text() or ""))
+        except Exception:
+            out.append("")
     return "\n".join(out)
 
 def parse_docx(bytes_blob: bytes) -> str:
@@ -157,21 +163,26 @@ def parse_docx(bytes_blob: bytes) -> str:
 
 # ---------- Routes ----------
 @app.route("/", methods=["GET"])
-def health(): return Response("OK", mimetype="text/plain")
+def health():
+    return Response("OK", mimetype="text/plain")
 
 @app.route("/widget", methods=["GET"])
-def widget(): return render_template("widget.html", title=APP_TITLE)
+def widget():
+    return render_template("widget.html", title=APP_TITLE)
 
 @app.route("/admin/uploader", methods=["GET"])
-def uploader(): return render_template("uploader.html", title="Uploader | Novacool")
+def uploader():
+    return render_template("uploader.html", title="Uploader | Novacool")
 
 @app.route("/upload", methods=["POST"])
 def upload():
-    if "files" not in request.files: return jsonify({"error": "no files"}), 400
+    if "files" not in request.files:
+        return jsonify({"error": "no files"}), 400
     saved = []
     for f in request.files.getlist("files"):
         filename = pathlib.Path(f.filename).name
-        if not filename: continue
+        if not filename:
+            continue
         dest = os.path.join(UPLOAD_DIR, filename)
         f.save(dest)
         saved.append(filename)
@@ -185,13 +196,18 @@ def reindex():
         for fn in files:
             path = os.path.join(root, fn)
             try:
-                with open(path, "rb") as f: b = f.read()
+                with open(path, "rb") as f:
+                    b = f.read()
                 body = ""
-                if ext(path) == ".pdf": body = parse_pdf(b)
-                elif ext(path) == ".docx": body = parse_docx(b)
+                if ext(path) == ".pdf":
+                    body = parse_pdf(b)
+                elif ext(path) == ".docx":
+                    body = parse_docx(b)
                 else:
-                    try: body = b.decode("utf-8")
-                    except Exception: body = b.decode("latin-1", errors="ignore")
+                    try:
+                        body = b.decode("utf-8")
+                    except Exception:
+                        body = b.decode("latin-1", errors="ignore")
                 for c in chunk_text(body):
                     chunks.append({
                         "source_type": ext(path).lstrip(".") or "text",
@@ -203,6 +219,50 @@ def reindex():
                 continue
     added_total += add_chunks(chunks)
     return jsonify({"reindexed_chunks": added_total})
+
+# ---------- Crawl Endpoint with Progress ----------
+@app.route("/crawl", methods=["POST"])
+def crawl():
+    data = request.get_json(force=True)
+    url = data.get("url", "").strip()
+    if not url:
+        return jsonify({"error": "No URL provided"}), 400
+
+    if not re.match(r"^https?://", url):
+        url = "https://" + url
+
+    try:
+        r = requests.get(url, headers={"User-Agent": USER_AGENT}, timeout=20)
+        r.raise_for_status()
+    except Exception as e:
+        return jsonify({"error": f"Fetch failed: {e}"}), 400
+
+    soup = BeautifulSoup(r.text, "html.parser")
+    for tag in soup(["script", "style", "noscript"]):
+        tag.extract()
+    text = normspace(soup.get_text(separator="\n"))
+
+    if not text or len(text) < 100:
+        return jsonify({"error": "No usable text found"}), 400
+
+    chunks = []
+    total_chunks = len(chunk_text(text))
+    for i, c in enumerate(chunk_text(text), 1):
+        chunks.append({
+            "source_type": "html",
+            "source": url,
+            "location": "webpage",
+            "text": c
+        })
+        progress = int((i / total_chunks) * 100)
+        print(f"Crawl progress: {progress}%")
+
+    added = add_chunks(chunks)
+    return jsonify({
+        "url": url,
+        "added_chunks": added,
+        "message": f"Crawled and embedded {added} chunks from {url}"
+    })
 
 @app.route("/ask", methods=["POST"])
 def ask():
@@ -229,37 +289,5 @@ def ask():
 def uploads_public(filename):
     return send_from_directory(UPLOAD_DIR, filename)
 
-# ---------- Admin Workflow Dashboard ----------
-@app.route("/admin/status", methods=["GET"])
-def admin_status():
-    """Visual workflow dashboard: show uploads, chunk count, and reindex button."""
-    try:
-        files = sorted(os.listdir(UPLOAD_DIR))
-    except FileNotFoundError:
-        files = []
-    meta_count = 0
-    if os.path.exists(META_PATH):
-        with open(META_PATH, "r", encoding="utf-8") as f:
-            meta_count = sum(1 for _ in f)
-    html = [
-        "<html><head><title>Novacool RAG Status</title></head><body style='font-family:system-ui;background:#0b0b0d;color:#eee;padding:20px;'>",
-        "<h1>📊 Novacool RAG Status</h1>",
-        f"<p><b>Uploaded files:</b> {len(files)} total</p>",
-        "<ul>"
-    ]
-    for f in files:
-        html.append(f"<li><a href='/uploads/{f}' style='color:#9cf'>{f}</a></li>")
-    html.append("</ul>")
-    html.append(f"<p><b>Embedded chunks:</b> {meta_count}</p>")
-    html.append("""
-        <form action="/reindex" method="post">
-            <button style="background:#e11d2e;border:none;color:white;padding:10px 14px;border-radius:8px;font-weight:600;cursor:pointer;">🔄 Reindex Now</button>
-        </form>
-    """)
-    html.append("<p style='margin-top:20px'><a href='/admin/uploader' style='color:#ff445a'>⬆️ Back to uploader</a></p>")
-    html.append("</body></html>")
-    return "\n".join(html)
-
-# -------------- Run local (Render uses gunicorn) --------------
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", "5000")))
