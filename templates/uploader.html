@@ -1,0 +1,143 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>{{ title }}</title>
+  <style>
+    :root{
+      --bg:#0b0b0d;--panel:#131316;--accent:#e11d2e;--accent-2:#ff445a;
+      --text:#f2f2f2;--muted:#a7a7ab;--border:#242429;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:linear-gradient(180deg,#0b0b0d,#101014);
+         color:var(--text);font-family:Inter,system-ui,Segoe UI,Roboto,Ubuntu,Arial}
+    .wrap{max-width:900px;margin:0 auto;padding:24px}
+    h1{margin:0 0 6px}
+    .muted{color:var(--muted)}
+    .panel{padding:18px;border:1px solid var(--border);
+           border-radius:14px;background:var(--panel)}
+    .drop{margin-top:14px;border:2px dashed #3a3a41;border-radius:12px;
+          height:180px;display:flex;align-items:center;justify-content:center;
+          color:var(--muted)}
+    .drop.drag{border-color:var(--accent);color:#fff}
+    .row{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
+    input[type=file]{display:none}
+    .btn{padding:10px 14px;border-radius:12px;border:1px solid #8b0d18;
+         background:var(--accent);color:#fff;font-weight:600;cursor:pointer}
+    .btn:hover{background:var(--accent-2)}
+    .ghost{background:#222228;border:1px solid var(--border);color:#fff}
+    .list{margin-top:12px;font-size:14px;max-height:200px;overflow:auto}
+    .ok{color:#72e49b}.err{color:#ff8896}
+    .progress{margin-top:10px;width:100%;height:10px;background:#2a2a2e;border-radius:6px;overflow:hidden}
+    .bar{height:100%;width:0;background:var(--accent);transition:width .2s ease}
+    table{margin-top:16px;width:100%;border-collapse:collapse;font-size:14px}
+    th,td{border-bottom:1px solid var(--border);padding:8px;text-align:left}
+    th{color:var(--muted);font-weight:600}
+    td{color:#f2f2f2}
+    .footer{margin-top:14px;font-size:12px;color:var(--muted)}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Admin Uploader</h1>
+    <div class="muted">Drop PDFs, DOCX, TXT, or MD files → <strong>Upload</strong>, <strong>Reindex</strong>, or <strong>Crawl Site</strong>.</div>
+
+    <div class="panel">
+      <div id="drop" class="drop">Drag & drop files here</div>
+      <div class="row">
+        <label class="btn">Choose Files<input id="file" type="file" multiple></label>
+        <button id="upload" class="btn">Upload</button>
+        <button id="reindex" class="btn ghost">Reindex</button>
+        <button id="crawl" class="btn ghost">🌐 Crawl novacool.com</button>
+      </div>
+      <div id="progress" class="progress"><div class="bar" id="bar"></div></div>
+      <div id="list" class="list"></div>
+
+      <!-- 🧾 File Summary Table -->
+      <table id="summaryTable" style="display:none">
+        <thead>
+          <tr><th>Filename / URL</th><th>Type</th><th>Date</th><th>Chunks</th></tr>
+        </thead>
+        <tbody id="summaryBody"></tbody>
+      </table>
+    </div>
+
+    <p class="footer">Chat UI: <a href="/widget">/widget</a></p>
+  </div>
+
+  <script>
+    const drop=document.getElementById('drop'),file=document.getElementById('file'),
+          list=document.getElementById('list'),bar=document.getElementById('bar'),
+          table=document.getElementById('summaryTable'),tbody=document.getElementById('summaryBody');
+    let files=[];
+
+    const show=(m,c='')=>{
+      const p=document.createElement('div');p.className=c;p.textContent=m;
+      list.appendChild(p);list.scrollTop=list.scrollHeight;
+    };
+    const setProgress=p=>{bar.style.width=p+'%'};
+
+    const addSummary=(filename,type,chunks)=>{
+      table.style.display='table';
+      const row=document.createElement('tr');
+      const date=new Date().toLocaleString();
+      row.innerHTML=`<td>${filename}</td><td>${type}</td><td>${date}</td><td>${chunks}</td>`;
+      tbody.appendChild(row);
+    };
+
+    drop.addEventListener('dragover',e=>{e.preventDefault();drop.classList.add('drag')});
+    drop.addEventListener('dragleave',()=>drop.classList.remove('drag'));
+    drop.addEventListener('drop',e=>{
+      e.preventDefault();drop.classList.remove('drag');
+      files=[...files,...e.dataTransfer.files];
+      show(`${e.dataTransfer.files.length} file(s) added`);
+    });
+
+    file.addEventListener('change',()=>{
+      files=[...files,...file.files];
+      show(`${file.files.length} file(s) added`);
+      file.value='';
+    });
+
+    document.getElementById('upload').onclick=async()=>{
+      if(!files.length){show('No files selected','err');return;}
+      const fd=new FormData();for(const f of files)fd.append('files',f);
+      show('Uploading…');const r=await fetch('/upload',{method:'POST',body:fd});
+      const d=await r.json();
+      if(d.saved?.length){
+        show(`Uploaded: ${d.saved.join(', ')}`,'ok');
+        d.saved.forEach(f=>addSummary(f,'upload','—'));
+        files=[];
+      }else show('Upload failed','err');
+    };
+
+    document.getElementById('reindex').onclick=async()=>{
+      show('Reindexing…');setProgress(0);
+      const r=await fetch('/reindex',{method:'POST'});
+      const d=await r.json();
+      setProgress(100);
+      show(`Reindexed chunks: ${d.reindexed_chunks??0}`,'ok');
+      addSummary('Local Uploads','reindex',d.reindexed_chunks??0);
+    };
+
+    document.getElementById('crawl').onclick=async()=>{
+      show('Starting crawl of novacool.com…');setProgress(0);
+      try{
+        const r=await fetch('/ingest/urls',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({urls:['https://novacool.com'],crawl_depth:1,max_pages:30})
+        });
+        const d=await r.json();
+        let prog=0;const int=setInterval(()=>{
+          prog=Math.min(100,prog+5);setProgress(prog);
+          if(prog>=100)clearInterval(int);
+        },150);
+        show(`Crawled ${d.pages_crawled??0} pages, added ${d.added_chunks??0} chunks`,'ok');
+        addSummary('https://novacool.com','crawl',d.added_chunks??0);
+      }catch(e){show('Crawl failed: '+e,'err');}
+    };
+  </script>
+</body>
+</html>
