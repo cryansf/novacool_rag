@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Novacool Data Uploader</title>
+<style>
+body {
+  margin:0; background:#0b0b0b; color:#f5f5f5;
+  font-family:'Segoe UI',Roboto,sans-serif; display:flex;
+  flex-direction:column; align-items:center; justify-content:flex-start;
+  min-height:100vh; padding:20px;
+}
+header {display:flex; align-items:center; gap:10px; margin-bottom:20px;}
+header img {height:50px;}
+h1 {color:#b00000; margin:0;}
+.dropzone {
+  border:3px dashed #b00000; border-radius:12px;
+  width:80%; max-width:600px; height:200px;
+  display:flex; align-items:center; justify-content:center;
+  text-align:center; color:#bbb; cursor:pointer; margin-bottom:20px;
+}
+.dropzone.dragover {background:#1a0000; color:#fff;}
+button {
+  background:#b00000; color:#fff; border:none; border-radius:8px;
+  padding:10px 20px; font-size:1em; cursor:pointer;
+}
+#status {margin-top:20px; width:80%; max-width:600px; text-align:center;}
+</style>
+</head>
+<body>
+<header>
+  <img src="https://swfirefightingfoam.com/images/logo1-web.png" alt="Novacool Logo"/>
+  <h1>Data Uploader</h1>
+</header>
+
+<div id="dropzone" class="dropzone">Drag and drop files here or click to upload</div>
+<button id="reindexBtn">Reindex Knowledge Base</button>
+<div id="status"></div>
+
+<script>
+const dropzone=document.getElementById('dropzone');
+const status=document.getElementById('status');
+const reindexBtn=document.getElementById('reindexBtn');
+
+dropzone.addEventListener('dragover',e=>{e.preventDefault();dropzone.classList.add('dragover');});
+dropzone.addEventListener('dragleave',()=>dropzone.classList.remove('dragover'));
+dropzone.addEventListener('click',()=>{
+  const input=document.createElement('input');input.type='file';input.multiple=true;
+  input.onchange=()=>handleFiles(input.files);input.click();
+});
+dropzone.addEventListener('drop',e=>{
+  e.preventDefault();dropzone.classList.remove('dragover');handleFiles(e.dataTransfer.files);
+});
+
+async function handleFiles(files){
+  const formData=new FormData();
+  for(const f of files) formData.append('files',f);
+  status.textContent='Uploading '+files.length+' file(s)...';
+  try{
+    const r=await fetch('/upload',{method:'POST',body:formData});
+    const data=await r.json();
+    status.textContent='Uploaded successfully. Added '+(data.added_chunks||0)+' chunks.';
+  }catch(err){status.textContent='Error: '+err.message;}
+}
+
+reindexBtn.onclick=async()=>{
+  status.textContent='Reindexing...';
+  try{
+    const r=await fetch('/reindex',{method:'POST'});
+    const data=await r.json();
+    status.textContent='Reindex complete. '+JSON.stringify(data);
+  }catch(err){status.textContent='Error: '+err.message;}
+};
+</script>
+</body>
+</html>
