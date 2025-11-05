@@ -3,121 +3,56 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Uploader • Novacool’s Assistant</title>
+  <title>Novacool Uploader</title>
   <style>
-    :root{
-      --bg:#0b0b0d;
-      --panel:#131316;
-      --accent:#e11d2e;
-      --accent-2:#ff445a;
-      --text:#f2f2f2;
-      --muted:#a7a7ab;
-      --border:#242429;
-    }
-    *{box-sizing:border-box}
-    body{margin:0;background:linear-gradient(180deg,#0b0b0d,#101014);color:var(--text);font-family:Inter,system-ui,Segoe UI,Roboto,Ubuntu,Arial}
-    h1{margin:0 0 6px 0;font-size:20px}
-    .wrap{max-width:960px;margin:0 auto;padding:20px}
-    .card{background:var(--panel);padding:20px;border-radius:12px;border:1px solid var(--border);margin-bottom:20px}
-    button{padding:10px 16px;border-radius:10px;border:1px solid #8b0d18;background:var(--accent);color:#fff;font-weight:600;cursor:pointer}
-    button:hover{background:var(--accent-2)}
-    input[type=text]{width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:#0b0b0e;color:var(--text)}
-    #dropzone{border:2px dashed var(--border);border-radius:12px;padding:40px;text-align:center;cursor:pointer;color:var(--muted)}
-    #dropzone.dragover{border-color:var(--accent);color:var(--accent)}
-    #fileList{margin-top:15px;font-size:14px;color:var(--muted)}
-    #log{background:#0e0e12;border-radius:10px;padding:10px;height:240px;overflow:auto;font-size:13px;line-height:1.4;border:1px solid var(--border)}
-    .footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
-    progress{width:100%;height:18px;border-radius:10px;margin-top:8px}
+    body{background:#0b0b0d;color:#fff;font-family:Inter,system-ui,Segoe UI,Roboto,Ubuntu,Arial;margin:0;padding:0;text-align:center}
+    h1{margin:30px 0}
+    form{margin:20px auto;padding:20px;border:1px solid #333;border-radius:8px;max-width:400px;background:#131316}
+    input,button{display:block;width:100%;margin:10px 0;padding:10px;border-radius:8px;border:none}
+    button{background:#e11d2e;color:#fff;font-weight:bold;cursor:pointer}
+    button:hover{background:#ff445a}
+    pre{background:#111;padding:10px;text-align:left;overflow:auto;max-height:300px}
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="card">
-      <h1>📂 Upload Files</h1>
-      <div id="dropzone">Drop PDF, DOCX, or TXT files here<br>or click to browse.</div>
-      <input type="file" id="fileInput" multiple accept=".pdf,.docx,.txt" style="display:none"/>
-      <div id="fileList">No files uploaded yet.</div>
-    </div>
-
-    <div class="card">
-      <h1>🔄 Reindex Uploaded Files</h1>
-      <button id="reindexBtn">Start Reindex</button>
-      <progress id="progress" value="0" max="100" style="display:none"></progress>
-    </div>
-
-    <div class="card">
-      <h1>🌐 Crawl Website</h1>
-      <input type="text" id="crawlUrl" value="https://novacool.com"/>
-      <button id="crawlBtn" style="margin-top:10px">Crawl Now</button>
-    </div>
-
-    <div class="card">
-      <h1>📜 Activity Log</h1>
-      <div id="log">Ready.</div>
-    </div>
-
-    <div class="footer">
-      <a href="/widget" style="color:#ff8896">← Back to Assistant</a> • Powered by <strong>Novacool</strong>
-    </div>
-  </div>
-
+  <h1>Admin Uploader</h1>
+  <form id="uploadForm" enctype="multipart/form-data">
+    <input type="file" name="files" multiple/>
+    <button type="submit">Upload</button>
+  </form>
+  <button id="reindex">Reindex All</button>
+  <button id="crawl">Crawl novacool.com</button>
+  <pre id="log"></pre>
   <script>
-    const dropzone = document.getElementById('dropzone');
-    const fileInput = document.getElementById('fileInput');
-    const fileList = document.getElementById('fileList');
     const log = document.getElementById('log');
-    const progress = document.getElementById('progress');
+    const uploadForm = document.getElementById('uploadForm');
+    const reindexBtn = document.getElementById('reindex');
+    const crawlBtn = document.getElementById('crawl');
 
-    function logMsg(msg){
-      const now = new Date().toLocaleTimeString();
-      log.innerHTML += `<div>[${now}] ${msg}</div>`;
-      log.scrollTop = log.scrollHeight;
-    }
+    function addLog(msg){ log.textContent += msg + "\n"; log.scrollTop = log.scrollHeight; }
 
-    dropzone.addEventListener('click',()=>fileInput.click());
-    dropzone.addEventListener('dragover',(e)=>{e.preventDefault();dropzone.classList.add('dragover')});
-    dropzone.addEventListener('dragleave',()=>dropzone.classList.remove('dragover'));
-    dropzone.addEventListener('drop',(e)=>{
-      e.preventDefault();dropzone.classList.remove('dragover');
-      uploadFiles(e.dataTransfer.files);
-    });
-    fileInput.addEventListener('change',()=>uploadFiles(fileInput.files));
-
-    async function uploadFiles(files){
-      if(!files.length) return;
-      const formData = new FormData();
-      for(const f of files){ formData.append('files',f); }
-      logMsg(`Uploading ${files.length} file(s)...`);
-      const r = await fetch('/upload',{method:'POST',body:formData});
-      const data = await r.json();
-      if(data.saved){
-        fileList.innerHTML = data.saved.map(f=>`✅ ${f}`).join('<br>');
-        logMsg(`Uploaded: ${data.saved.join(', ')}`);
-      } else logMsg('Upload error.');
-    }
-
-    document.getElementById('reindexBtn').addEventListener('click',async()=>{
-      logMsg('Starting reindex...');
-      progress.style.display='block';progress.value=10;
-      const r = await fetch('/reindex',{method:'POST'});
-      const data = await r.json();
-      if(data.error){ logMsg('❌ '+data.error); progress.value=0; return;}
-      progress.value=100;
-      logMsg(`✅ Reindex complete: ${data.reindexed_chunks} chunks indexed.`);
+    uploadForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const data = new FormData(uploadForm);
+      addLog("Uploading files...");
+      const r = await fetch('/upload', { method: 'POST', body: data });
+      const j = await r.json();
+      addLog("Uploaded: " + JSON.stringify(j.saved));
     });
 
-    document.getElementById('crawlBtn').addEventListener('click',async()=>{
-      const url = document.getElementById('crawlUrl').value.trim();
-      if(!url) return logMsg('Please enter a URL.');
-      logMsg(`Crawling ${url}...`);
-      progress.style.display='block';progress.value=10;
-      const r = await fetch('/crawl',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url})});
-      const data = await r.json();
-      if(data.error){ logMsg('❌ '+data.error); progress.value=0; return;}
-      progress.value=100;
-      logMsg(`✅ ${data.message} (${data.chunks} chunks).`);
-      if(data.log) data.log.forEach(l=>logMsg(l));
-    });
+    reindexBtn.onclick = async () => {
+      addLog("Reindexing...");
+      const r = await fetch('/reindex', { method: 'POST' });
+      const j = await r.json();
+      addLog("Reindex done: " + JSON.stringify(j));
+    };
+
+    crawlBtn.onclick = async () => {
+      addLog("Crawling site...");
+      const r = await fetch('/crawl', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({url: 'https://novacool.com'}) });
+      const j = await r.json();
+      addLog("Crawl result: " + JSON.stringify(j));
+    };
   </script>
 </body>
 </html>
