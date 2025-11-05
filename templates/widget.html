@@ -6,27 +6,13 @@
   <title>Novacool’s Assistant</title>
   <style>
     :root{
-      --bg:#0b0b0d;
-      --panel:#131316;
-      --accent:#e11d2e;
-      --accent-2:#ff445a;
-      --text:#f2f2f2;
-      --muted:#a7a7ab;
-      --bubble-user:#1d1d21;
-      --bubble-bot:#141418;
-      --border:#242429;
+      --bg:#0b0b0d;--panel:#131316;--accent:#e11d2e;--accent-2:#ff445a;--text:#f2f2f2;--muted:#a7a7ab;--bubble-user:#1d1d21;--bubble-bot:#141418;--border:#242429;
     }
     *{box-sizing:border-box}
     body{margin:0;background:linear-gradient(180deg,#0b0b0d,#101014);color:var(--text);font-family:Inter,system-ui,Segoe UI,Roboto,Ubuntu,Arial}
     .wrap{max-width:900px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column}
-    header{
-      padding:16px 18px;border-bottom:1px solid var(--border);background:#0d0d10;
-      position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:12px
-    }
-    .flame{
-      width:36px;height:36px;border-radius:10px;background:radial-gradient(60% 60% at 50% 30%,#ff8c9a 0,#e11d2e 55%,#8b0d18 100%);
-      box-shadow:0 0 18px rgba(225,29,46,.45)
-    }
+    header{padding:16px 18px;border-bottom:1px solid var(--border);background:#0d0d10;position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:12px}
+    .flame{width:36px;height:36px;border-radius:10px;background:radial-gradient(60% 60% at 50% 30%,#ff8c9a 0,#e11d2e 55%,#8b0d18 100%);box-shadow:0 0 18px rgba(225,29,46,.45)}
     h1{margin:0;font-size:18px;letter-spacing:.3px}
     .sub{color:var(--muted);font-size:12px}
     #log{flex:1;overflow:auto;padding:20px 16px;display:flex;flex-direction:column;gap:14px;background:linear-gradient(180deg,#101014,#0e0e12)}
@@ -34,18 +20,10 @@
     .you{align-self:flex-end;background:var(--bubble-user)}
     .bot{align-self:flex-start;background:var(--bubble-bot)}
     .src{margin-top:8px;color:var(--muted);font-size:12px}
-    form{
-      display:flex;gap:10px;padding:14px;border-top:1px solid var(--border);
-      background:linear-gradient(180deg,#0e0e12,#0c0c10);position:sticky;bottom:0
-    }
-    input[type=text]{
-      flex:1;padding:12px 13px;border-radius:12px;border:1px solid var(--border);
-      background:#0b0b0e;color:var(--text);outline:none
-    }
+    form{display:flex;gap:10px;padding:14px;border-top:1px solid var(--border);background:linear-gradient(180deg,#0e0e12,#0c0c10);position:sticky;bottom:0}
+    input[type=text]{flex:1;padding:12px 13px;border-radius:12px;border:1px solid var(--border);background:#0b0b0e;color:var(--text);outline:none}
     input[type=text]::placeholder{color:#7d7d84}
-    button{
-      padding:12px 16px;border-radius:12px;border:1px solid #8b0d18;background:var(--accent);color:#fff;font-weight:600;cursor:pointer
-    }
+    button{padding:12px 16px;border-radius:12px;border:1px solid #8b0d18;background:var(--accent);color:#fff;font-weight:600;cursor:pointer}
     button:hover{background:var(--accent-2)}
     .footer{padding:10px 16px;color:var(--muted);font-size:12px;text-align:center}
     a{color:#ff8896}
@@ -60,22 +38,17 @@
         <div class="sub">Ask about Novacool UEF mix rates, environmental profile, documentation, and more.</div>
       </div>
     </header>
-
     <div id="log"></div>
-
     <form id="chat">
       <input id="q" type="text" placeholder="Type your question…" autocomplete="off"/>
       <button type="submit">Ask</button>
     </form>
-
     <div class="footer">Powered by <strong>Novacool</strong> | AI Assistant • <a href="/admin/uploader">admin uploader</a></div>
   </div>
-
   <script>
     const log = document.getElementById('log');
     const form = document.getElementById('chat');
     const q = document.getElementById('q');
-
     function add(role, html){
       const d = document.createElement('div');
       d.className = 'msg ' + (role === 'you' ? 'you' : 'bot');
@@ -84,16 +57,13 @@
       log.scrollTop = log.scrollHeight;
       return d;
     }
-
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const text = q.value.trim();
       if(!text) return;
       add('you', text);
       q.value = '';
-
       const hold = add('bot', 'Thinking…');
-
       try {
         const r = await fetch('/ask', {
           method: 'POST',
