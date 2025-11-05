@@ -1,177 +1,204 @@
-<!doctype html>
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>{{ title }}</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Uploader | Novacool</title>
   <style>
-    :root {
-      --bg:#0b0b0d;
-      --panel:#131316;
-      --accent:#e11d2e;
-      --accent-2:#ff445a;
-      --text:#f2f2f2;
-      --muted:#a7a7ab;
-      --border:#242429;
-    }
-    *{box-sizing:border-box}
     body {
-      margin:0;
-      background:linear-gradient(180deg,#0b0b0d,#101014);
-      color:var(--text);
-      font-family:Inter,system-ui,Segoe UI,Roboto,Ubuntu,Arial;
+      font-family: Arial, sans-serif;
+      background-color: #111;
+      color: #eee;
+      padding: 30px;
     }
-    .wrap {max-width:900px;margin:0 auto;padding:24px;}
-    h1 {margin:0 0 6px;}
-    .muted {color:var(--muted);}
-    .panel {
-      padding:18px;border:1px solid var(--border);
-      border-radius:14px;background:var(--panel);
+    h1 {
+      color: #fff;
+      font-size: 2rem;
     }
-    .drop {
-      margin-top:14px;border:2px dashed #3a3a41;border-radius:12px;
-      height:180px;display:flex;gap:10px;align-items:center;justify-content:center;
-      color:var(--muted);transition:all .2s ease;
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: #1b1b1b;
+      border-radius: 12px;
+      padding: 20px 30px;
+      box-shadow: 0 0 10px #000;
     }
-    .drop.drag {border-color:var(--accent);color:#fff;}
-    .row {display:flex;gap:10px;margin-top:14px;}
-    input[type=file]{display:none}
-    .btn {
-      padding:10px 14px;border-radius:12px;border:1px solid #8b0d18;
-      background:var(--accent);color:#fff;font-weight:600;cursor:pointer;
-      transition:background .2s ease;
+    button {
+      padding: 10px 16px;
+      border: none;
+      border-radius: 6px;
+      font-size: 1rem;
+      cursor: pointer;
+      margin-right: 10px;
+      transition: 0.2s ease;
     }
-    .btn:hover {background:var(--accent-2);}
-    .ghost {background:#222228;border:1px solid var(--border);color:#fff;}
-    .crawl {background:#1f1f23;border:1px solid #303036;color:#fff;}
-    .crawl:hover {background:#33333a;}
-    .list {margin-top:10px;font-size:14px;max-height:200px;overflow:auto;}
-    .ok {color:#72e49b;}
-    .err {color:#ff8896;}
-    .progress {
-      width:100%;height:10px;background:#222;margin-top:14px;border-radius:6px;
-      overflow:hidden;display:none;
+    button:hover {
+      opacity: 0.9;
     }
-    .bar {
-      height:100%;width:0%;background:var(--accent);transition:width .3s ease;
+    .upload { background: #e53e3e; color: white; }
+    .reindex { background: #38b2ac; color: white; }
+    .crawl { background: #3182ce; color: white; }
+
+    .progress-container {
+      width: 100%;
+      background: #333;
+      border-radius: 8px;
+      margin-top: 20px;
+      height: 14px;
+      overflow: hidden;
+    }
+    .progress-bar {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, #00b4d8, #0077b6);
+      transition: width 0.3s ease;
+    }
+
+    #log {
+      background: #0d0d0d;
+      border: 1px solid #333;
+      padding: 12px;
+      border-radius: 8px;
+      font-family: monospace;
+      font-size: 0.9rem;
+      max-height: 280px;
+      overflow-y: auto;
+      margin-top: 15px;
+      white-space: pre-wrap;
+    }
+
+    .footer {
+      text-align: center;
+      margin-top: 20px;
+      color: #888;
+      font-size: 0.9rem;
+    }
+
+    .drag-area {
+      border: 2px dashed #444;
+      border-radius: 8px;
+      padding: 40px;
+      text-align: center;
+      color: #aaa;
+      margin-top: 20px;
+    }
+    .drag-area.dragover {
+      border-color: #00b4d8;
+      background: rgba(0, 180, 216, 0.05);
     }
   </style>
 </head>
 <body>
-  <div class="wrap">
+  <div class="container">
     <h1>Admin Uploader</h1>
-    <div class="muted">
-      Drop PDFs, DOCX, TXT, or MD files → <strong>Upload</strong>, <strong>Reindex</strong>, or <strong>Crawl Site</strong>.
+    <p>Drop PDFs, DOCX, TXT, or MD files → <b>Upload</b>, <b>Reindex</b>, or <b>Crawl Site</b>.</p>
+
+    <div class="drag-area" id="drop-zone">Drag & Drop files here</div>
+
+    <div style="margin-top: 20px;">
+      <input type="file" id="file-input" multiple style="display:none" />
+      <button class="upload" id="upload-btn">Upload</button>
+      <button class="reindex" id="reindex-btn">Reindex</button>
+      <button class="crawl" id="crawl-btn">🌐 Crawl novacool.com</button>
     </div>
 
-    <div class="panel">
-      <div id="drop" class="drop">Drag & drop files here</div>
-      <div class="row">
-        <label class="btn">
-          Choose Files
-          <input id="file" type="file" multiple>
-        </label>
-        <button id="upload" class="btn">Upload</button>
-        <button id="reindex" class="btn ghost">Reindex</button>
-        <button id="crawl" class="btn crawl">🌐 Crawl novacool.com</button>
-      </div>
-
-      <div class="progress" id="progress"><div class="bar" id="bar"></div></div>
-      <div id="list" class="list"></div>
+    <div class="progress-container">
+      <div class="progress-bar" id="progress-bar"></div>
     </div>
 
-    <p class="muted" style="margin-top:16px">Chat UI: <a href="/widget">/widget</a></p>
+    <div id="log">Idle.</div>
+
+    <div class="footer">
+      Chat UI: <a href="/widget" style="color:#00b4d8;">/widget</a>
+    </div>
   </div>
 
   <script>
-    const drop = document.getElementById('drop');
-    const file = document.getElementById('file');
-    const list = document.getElementById('list');
-    const bar = document.getElementById('bar');
-    const progress = document.getElementById('progress');
-    let files = [];
+    const uploadBtn = document.getElementById('upload-btn');
+    const reindexBtn = document.getElementById('reindex-btn');
+    const crawlBtn = document.getElementById('crawl-btn');
+    const progressBar = document.getElementById('progress-bar');
+    const logDiv = document.getElementById('log');
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('file-input');
 
-    function show(msg, cls) {
-      const p = document.createElement('div');
-      p.className = cls || '';
-      p.textContent = msg;
-      list.appendChild(p);
-      list.scrollTop = list.scrollHeight;
+    function log(msg, reset=false) {
+      if (reset) logDiv.textContent = '';
+      logDiv.textContent += msg + "\\n";
+      logDiv.scrollTop = logDiv.scrollHeight;
     }
 
-    function setProgress(val) {
-      progress.style.display = 'block';
-      bar.style.width = val + '%';
-      if (val >= 100) setTimeout(() => progress.style.display = 'none', 1000);
-    }
+    // Upload files
+    uploadBtn.onclick = async () => {
+      fileInput.click();
+      fileInput.onchange = async () => {
+        const files = fileInput.files;
+        if (!files.length) return;
+        const fd = new FormData();
+        for (let f of files) fd.append('files', f);
+        log("Uploading files...", true);
+        progressBar.style.width = "25%";
+        const r = await fetch("/upload", { method: "POST", body: fd });
+        const j = await r.json();
+        progressBar.style.width = "100%";
+        log("✅ Uploaded: " + JSON.stringify(j));
+        setTimeout(() => progressBar.style.width = "0%", 500);
+      };
+    };
 
-    drop.addEventListener('dragover', (e)=>{e.preventDefault();drop.classList.add('drag');});
-    drop.addEventListener('dragleave', ()=>drop.classList.remove('drag'));
-    drop.addEventListener('drop',(e)=>{
-      e.preventDefault();drop.classList.remove('drag');
-      files = [...files, ...e.dataTransfer.files];
-      show(`${e.dataTransfer.files.length} file(s) added`);
+    // Reindex
+    reindexBtn.onclick = async () => {
+      log("Reindexing...", true);
+      progressBar.style.width = "30%";
+      const r = await fetch("/reindex", { method: "POST" });
+      const j = await r.json();
+      progressBar.style.width = "100%";
+      log("✅ Reindexed: " + JSON.stringify(j));
+      setTimeout(() => progressBar.style.width = "0%", 700);
+    };
+
+    // Crawl novacool.com
+    crawlBtn.onclick = async () => {
+      log("Starting crawl of novacool.com...", true);
+      progressBar.style.width = "10%";
+      const r = await fetch("/crawl", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: "https://novacool.com" })
+      });
+      const j = await r.json();
+      if (j.error) {
+        log("❌ " + j.error);
+      } else {
+        log("✅ " + j.message);
+      }
+      if (j.log) {
+        log("\\nCrawl Log:\\n" + j.log.join("\\n"));
+      }
+      progressBar.style.width = "100%";
+      setTimeout(() => progressBar.style.width = "0%", 800);
+    };
+
+    // Drag-and-drop upload
+    dropZone.addEventListener("dragover", e => {
+      e.preventDefault(); dropZone.classList.add("dragover");
     });
-
-    file.addEventListener('change', ()=>{
-      files = [...files, ...file.files];
-      show(`${file.files.length} file(s) added`);
-      file.value = '';
+    dropZone.addEventListener("dragleave", e => {
+      e.preventDefault(); dropZone.classList.remove("dragover");
     });
-
-    document.getElementById('upload').onclick = async ()=>{
-      if(!files.length){show('No files selected','err');return;}
+    dropZone.addEventListener("drop", e => {
+      e.preventDefault();
+      dropZone.classList.remove("dragover");
+      const files = e.dataTransfer.files;
+      if (!files.length) return;
       const fd = new FormData();
-      for(const f of files) fd.append('files', f);
-      show('Uploading…');
-      const r = await fetch('/upload',{method:'POST',body:fd});
-      const data = await r.json();
-      if(data.saved && data.saved.length){
-        show(`Uploaded: ${data.saved.join(', ')}`,'ok');
-        files = [];
-      }else{
-        show('Upload failed','err');
-      }
-    };
-
-    document.getElementById('reindex').onclick = async ()=>{
-      show('Reindexing…');
-      setProgress(0);
-      const r = await fetch('/reindex',{method:'POST'});
-      const data = await r.json();
-      setProgress(100);
-      show(`Reindexed chunks: ${data.reindexed_chunks ?? 0}`,'ok');
-    };
-
-    document.getElementById('crawl').onclick = async ()=>{
-      show('Starting crawl of novacool.com…');
-      setProgress(5);
-      try {
-        const r = await fetch('/crawl',{
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({url:'https://novacool.com'})
-        });
-        let pct = 10;
-        const interval = setInterval(()=>{
-          pct = Math.min(pct + 10, 90);
-          setProgress(pct);
-        },1000);
-
-        const data = await r.json();
-        clearInterval(interval);
-        setProgress(100);
-
-        if(data.error){
-          show('Crawl failed: ' + data.error,'err');
-        }else{
-          show(data.message,'ok');
-        }
-      }catch(err){
-        show('Crawl failed: ' + err,'err');
-        setProgress(0);
-      }
-    };
+      for (let f of files) fd.append("files", f);
+      log("Uploading dropped files...", true);
+      fetch("/upload", { method: "POST", body: fd })
+        .then(r => r.json())
+        .then(j => log("✅ Uploaded: " + JSON.stringify(j)))
+        .catch(err => log("❌ " + err));
+    });
   </script>
 </body>
 </html>
