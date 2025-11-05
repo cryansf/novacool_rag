@@ -1,12 +1,14 @@
-# app_flask.py — Novacool's Assistant (Flask on Render)
+# app_flask.py — Novacool’s Assistant (Flask on Render)
 # - Full-page chat UI (/widget)
-# - Admin uploader (/admin/uploader) with Upload, Reindex, Crawl, and Progress Bar
+# - Drag & drop uploader (/admin/uploader) -> POST /upload
+# - Reindex button (/reindex) to (re)embed files in /data/uploads
+# - Crawl button (/crawl) to fetch and embed web pages
+# - Ask endpoint (/ask) using OpenAI (no openai package required)
 # - Vector store: ./data/vecs.npy + ./data/meta.jsonl
-# - Uses OpenAI for embeddings + chat
 
-import os, io, re, json, time, uuid, pathlib, urllib.parse, queue
+import os, io, re, json, time, uuid, pathlib, urllib.parse
 from typing import List, Dict, Any
-from flask import Flask, request, jsonify, Response, render_template, send_from_directory, stream_with_context
+from flask import Flask, request, jsonify, Response, render_template, send_from_directory
 import requests
 import numpy as np
 from bs4 import BeautifulSoup
@@ -16,14 +18,16 @@ APP_TITLE = "Novacool’s Assistant"
 DATA_DIR = "data"
 UPLOAD_DIR = f"{DATA_DIR}/uploads"
 META_PATH = f"{DATA_DIR}/meta.jsonl"
-VEC_PATH = f"{DATA_DIR}/vecs.npy"
+VEC_PATH  = f"{DATA_DIR}/vecs.npy"
 
-EMBED_MODEL = "text-embedding-3-small" # 1536 dims
-CHAT_MODEL = "gpt-4o-mini"
+EMBED_MODEL = "text-embedding-3-small"   # 1536 dims
+CHAT_MODEL  = "gpt-4o-mini"
 TOP_K = 5
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 150
-USER_AGENT = "Novacool-RAG/1.0"
+
+HOST_WHITELIST = [d.strip().lower() for d in os.getenv("HOST_DOMAIN_WHITELIST","novacool.com,swfirefightingfoam.com").split(",") if d.strip()]
+USER_AGENT = "Novacool-RAG/1.1"
 
 os.makedirs(DATA_DIR, exist_ok=True)
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -220,20 +224,21 @@ def reindex():
     added_total += add_chunks(chunks)
     return jsonify({"reindexed_chunks": added_total})
 
-# ---------- Crawl Endpoint with Progress ----------
+# ---------- Crawl Novacool.com ----------
 @app.route("/crawl", methods=["POST"])
 def crawl():
     data = request.get_json(force=True)
     url = data.get("url", "").strip()
     if not url:
         return jsonify({"error": "No URL provided"}), 400
-
     if not re.match(r"^https?://", url):
         url = "https://" + url
 
     try:
-        r = requests.get(url, headers={"User-Agent": USER_AGENT}, timeout=20)
+        r = requests.get(url, headers={"User-Agent": USER_AGENT}, timeout=20, allow_redirects=True)
         r.raise_for_status()
+        if "text/html" not in r.headers.get("Content-Type", ""):
+            return jsonify({"error": f"Unexpected content type: {r.headers.get('Content-Type', 'unknown')}"}), 400
     except Exception as e:
         return jsonify({"error": f"Fetch failed: {e}"}), 400
 
@@ -246,16 +251,13 @@ def crawl():
         return jsonify({"error": "No usable text found"}), 400
 
     chunks = []
-    total_chunks = len(chunk_text(text))
-    for i, c in enumerate(chunk_text(text), 1):
+    for c in chunk_text(text):
         chunks.append({
             "source_type": "html",
             "source": url,
             "location": "webpage",
             "text": c
         })
-        progress = int((i / total_chunks) * 100)
-        print(f"Crawl progress: {progress}%")
 
     added = add_chunks(chunks)
     return jsonify({
@@ -289,5 +291,6 @@ def ask():
 def uploads_public(filename):
     return send_from_directory(UPLOAD_DIR, filename)
 
+# ---------- Run local ----------
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", "5000")))
