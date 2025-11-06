@@ -5,7 +5,7 @@ from docx import Document
 from PyPDF2 import PdfReader
 
 # ---------- CONFIG ----------
-DATA_DIR = "data"
+DATA_DIR = "/data"  # persistent disk mount path on Render
 UPLOAD_DIR = os.path.join(DATA_DIR, "uploads")
 META_FILE = os.path.join(DATA_DIR, "meta.json")
 VECS_FILE = os.path.join(DATA_DIR, "vecs.npy")
