@@ -1,105 +1,137 @@
-<!doctype html>
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Novacool Uploader</title>
-  <style>
-    body{background:#0b0b0d;color:#fff;font-family:Inter,system-ui,Segoe UI,Roboto,Ubuntu,Arial;margin:0;padding:0;text-align:center}
-    h1{margin:30px 0}
-    form{margin:20px auto;padding:20px;border:1px solid #333;border-radius:8px;max-width:400px;background:#131316}
-    input,button{display:block;width:100%;margin:10px 0;padding:10px;border-radius:8px;border:none}
-    button{background:#e11d2e;color:#fff;font-weight:bold;cursor:pointer;transition:opacity .3s}
-    button:hover{background:#ff445a}
-    button:disabled{background:#555;cursor:not-allowed;opacity:0.7}
-    pre{background:#111;padding:10px;text-align:left;overflow:auto;max-height:300px}
-  </style>
+<meta charset="UTF-8" />
+<title>Admin Uploader</title>
+<style>
+body {
+  background-color: #0b0b0b;
+  color: white;
+  font-family: Arial, sans-serif;
+  text-align: center;
+  margin: 0;
+  padding: 0;
+}
+h1 {
+  margin-top: 40px;
+}
+button {
+  background-color: #e53935;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  margin: 10px;
+  border-radius: 8px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background-color 0.2s ease-in-out;
+}
+button:hover {
+  background-color: #d32f2f;
+}
+button:disabled {
+  background-color: #555;
+  cursor: not-allowed;
+}
+#console {
+  background-color: black;
+  color: white;
+  text-align: left;
+  padding: 10px;
+  margin-top: 20px;
+  font-family: monospace;
+  font-size: 14px;
+  height: 150px;
+  overflow-y: auto;
+  border-top: 2px solid #333;
+}
+.error {
+  color: #ff5252;
+}
+</style>
 </head>
 <body>
-  <h1>Admin Uploader</h1>
-  <form id="uploadForm" enctype="multipart/form-data">
-    <input type="file" name="files" multiple/>
-    <button type="submit">Upload</button>
-  </form>
-  <button id="reindex">Reindex All</button>
-  <button id="crawl">Crawl novacool.com</button>
-  <pre id="log"></pre>
+<h1>Admin Uploader</h1>
+<div>
+  <input type="file" id="fileInput" multiple />
+  <button id="uploadBtn">Upload</button>
+</div>
+<div>
+  <button id="reindexBtn">Reindex All</button>
+  <button id="crawlBtn">Crawl novacool.com</button>
+</div>
+<div id="console"></div>
+<script>
+const log = (msg, cls='') => {
+  const c = document.getElementById('console');
+  const line = document.createElement('div');
+  if (cls) line.classList.add(cls);
+  const t = new Date().toLocaleTimeString();
+  line.textContent = `[${t}] ${msg}`;
+  c.appendChild(line);
+  c.scrollTop = c.scrollHeight;
+};
 
-  <script>
-    const log = document.getElementById('log');
-    const uploadForm = document.getElementById('uploadForm');
-    const reindexBtn = document.getElementById('reindex');
-    const crawlBtn = document.getElementById('crawl');
-
-    function addLog(msg){ 
-      const now = new Date().toLocaleTimeString();
-      log.textContent += `[${now}] ${msg}\n`; 
-      log.scrollTop = log.scrollHeight; 
+async function safeFetch(url, options) {
+  try {
+    const r = await fetch(url, options);
+    const text = await r.text();
+    try {
+      return JSON.parse(text);
+    } catch {
+      log('⚠️ Server returned non‑JSON response:', 'error');
+      log(text.slice(0, 200) + '...', 'error');
+      return null;
     }
+  } catch (e) {
+    log('❌ Network error: ' + e, 'error');
+    return null;
+  }
+}
 
-    // Upload handler
-    uploadForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const data = new FormData(uploadForm);
-      addLog("Uploading files...");
-      const r = await fetch('/upload', { method: 'POST', body: data });
-      const j = await r.json();
-      addLog("Uploaded: " + JSON.stringify(j.saved));
-    });
+document.getElementById('uploadBtn').onclick = async () => {
+  const files = document.getElementById('fileInput').files;
+  if (!files.length) {
+    log('No files selected.', 'error');
+    return;
+  }
+  log('📤 Uploading files...');
+  const fd = new FormData();
+  for (const f of files) fd.append('files', f);
+  document.getElementById('uploadBtn').disabled = true;
+  const res = await safeFetch('/upload', { method: 'POST', body: fd });
+  document.getElementById('uploadBtn').disabled = false;
+  if (res && res.saved) log('✅ Uploaded: ' + JSON.stringify(res.saved));
+  else log('⚠️ Upload failed.', 'error');
+};
 
-    // Reindex handler
-    reindexBtn.onclick = async () => {
-      reindexBtn.disabled = true;
-      reindexBtn.style.opacity = "0.6";
-      reindexBtn.innerText = "Reindexing...";
-      addLog("Reindexing started... please wait.");
-      
-      let dots = 0;
-      const timer = setInterval(() => {
-        if (reindexBtn.disabled) {
-          reindexBtn.innerText = "Reindexing" + ".".repeat((dots++ % 3) + 1);
-        } else {
-          clearInterval(timer);
-        }
-      }, 600);
+document.getElementById('reindexBtn').onclick = async () => {
+  log('🧩 Reindexing started... please wait.');
+  const btn = document.getElementById('reindexBtn');
+  btn.disabled = true;
+  const res = await safeFetch('/reindex', { method: 'POST' });
+  btn.disabled = false;
+  if (res && res.reindexed_chunks !== undefined)
+    log(`✅ Reindex complete: ${res.reindexed_chunks} chunks processed.`);
+  else
+    log('⚠️ Reindex failed or incomplete.', 'error');
+};
 
-      try {
-        const r = await fetch('/reindex', { method: 'POST' });
-        const j = await r.json();
-
-        if (j.error) {
-          addLog("❌ Error: " + j.error);
-          alert("Reindexing failed: " + j.error);
-        } else {
-          addLog(`✅ Reindex complete: ${j.reindexed_chunks || 0} chunks indexed.`);
-          alert("Reindexing complete!");
-        }
-      } catch (err) {
-        addLog("❌ Error during reindex: " + err);
-        alert("Error: " + err);
-      }
-
-      // Restore button after short delay
-      setTimeout(() => {
-        reindexBtn.disabled = false;
-        reindexBtn.style.opacity = "1";
-        reindexBtn.innerText = "Reindex All";
-      }, 10000);
-    };
-
-    // Crawl handler
-    crawlBtn.onclick = async () => {
-      crawlBtn.disabled = true;
-      addLog("Crawling site...");
-      try {
-        const r = await fetch('/crawl', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({url: 'https://novacool.com'}) });
-        const j = await r.json();
-        addLog("🌐 Crawl result: " + JSON.stringify(j));
-      } catch (err) {
-        addLog("❌ Crawl error: " + err);
-      }
-      crawlBtn.disabled = false;
-    };
-  </script>
+document.getElementById('crawlBtn').onclick = async () => {
+  log('🌐 Crawling site...');
+  const btn = document.getElementById('crawlBtn');
+  btn.disabled = true;
+  const res = await safeFetch('/crawl', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({url: 'https://novacool.com'})
+  });
+  btn.disabled = false;
+  if (res && res.message)
+    log(`✅ ${res.message} (${res.chunks} chunks)`);
+  else
+    log('⚠️ Crawl failed.', 'error');
+};
+</script>
 </body>
 </html>
