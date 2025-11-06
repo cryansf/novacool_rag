@@ -1,4 +1,4 @@
-import os, re, json, uuid, time, requests, numpy as np
+import os, re, json, time, math, requests, numpy as np
 from flask import Flask, request, jsonify, render_template, send_from_directory
 from bs4 import BeautifulSoup
 from docx import Document
@@ -14,7 +14,7 @@ TOP_K = 5
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 200
 CHAT_MODEL = "gpt-4o-mini"
-EMBED_MODEL = "text-embedding-3-small"
+EMBED_MODEL = "text-embedding-3-large"  # switched for higher accuracy
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 app = Flask(__name__, template_folder="templates")
@@ -47,7 +47,7 @@ def openai_embeddings(texts):
             "Content-Type": "application/json",
         },
         json={"model": EMBED_MODEL, "input": texts},
-        timeout=60,
+        timeout=120,
     )
     r.raise_for_status()
     return [x["embedding"] for x in r.json()["data"]]
@@ -62,12 +62,11 @@ def save_vecs(v):
     np.save(VECS_FILE, np.array(v, dtype=np.float32))
 
 def load_vecs(): 
-    return np.load(VECS_FILE) if os.path.exists(VECS_FILE) else np.zeros((0, 1536), dtype=np.float32)
+    return np.load(VECS_FILE) if os.path.exists(VECS_FILE) else np.zeros((0, 3072), dtype=np.float32)
 
 # ---------- ROUTES ----------
 @app.route("/")
 def home():
-    # Show the main chat interface when visiting /
     return render_template("widget.html")
 
 @app.route("/widget")
@@ -91,12 +90,17 @@ def upload():
         path = os.path.join(UPLOAD_DIR, f.filename)
         f.save(path)
         saved.append(f.filename)
+    print(f"📁 Uploaded files: {saved}", flush=True)
     return jsonify({"saved": saved})
 
-# ---------- REINDEX ----------
+# ---------- REINDEX (Enhanced with Batch Logging) ----------
 @app.route("/reindex", methods=["POST"])
 def reindex():
+    print("🧩 Starting reindex...", flush=True)
     texts, metas = [], []
+    total_files = len(os.listdir(UPLOAD_DIR))
+    print(f"📁 Found {total_files} files to process.", flush=True)
+
     for fn in os.listdir(UPLOAD_DIR):
         fp = os.path.join(UPLOAD_DIR, fn)
         if fn.lower().endswith(".txt"):
@@ -108,17 +112,37 @@ def reindex():
             text = " ".join(p.text for p in doc.paragraphs)
         else:
             continue
+
         for chunk in chunk_text(text):
             metas.append({"file": fn, "text": chunk})
             texts.append(chunk)
 
+    total_chunks = len(texts)
     if not texts:
+        print("⚠️ No text found in uploaded files.", flush=True)
         return jsonify({"error": "No files found"}), 400
 
-    vecs = openai_embeddings(texts)
+    print(f"🧮 Total chunks to embed: {total_chunks}", flush=True)
+    batch_size = 100
+    all_vecs = []
+    batches = math.ceil(total_chunks / batch_size)
+
+    for i in range(0, total_chunks, batch_size):
+        batch = texts[i:i+batch_size]
+        batch_num = i // batch_size + 1
+        print(f"📦 Embedding batch {batch_num}/{batches} ({len(batch)} chunks)...", flush=True)
+        try:
+            vecs = openai_embeddings(batch)
+            all_vecs.extend(vecs)
+            print(f"✅ Completed batch {batch_num}/{batches}", flush=True)
+        except Exception as e:
+            print(f"❌ Error embedding batch {batch_num}: {e}", flush=True)
+            time.sleep(3)
+
     save_meta(metas)
-    save_vecs(vecs)
-    return jsonify({"reindexed_chunks": len(vecs)})
+    save_vecs(all_vecs)
+    print(f"🎉 Reindex complete: {len(all_vecs)} chunks embedded successfully.", flush=True)
+    return jsonify({"reindexed_chunks": len(all_vecs)})
 
 # ---------- CRAWL ----------
 @app.route("/crawl", methods=["POST"])
@@ -143,6 +167,7 @@ def crawl():
         log.append(f"Crawled {url} with {len(chunks)} chunks.")
         return jsonify({"message": "Crawl complete", "chunks": len(chunks), "log": log})
     except Exception as e:
+        print(f"❌ Crawl error: {e}", flush=True)
         return jsonify({"error": str(e)}), 500
 
 # ---------- ASK ----------
@@ -194,6 +219,7 @@ def ask():
         answer += f"\n\nSources: {', '.join(sources)}"
         return jsonify({"answer": answer})
     except Exception as e:
+        print(f"❌ Ask error: {e}", flush=True)
         return jsonify({"error": f"Backend error: {e}"}), 500
 
 # ---------- MAIN ----------
