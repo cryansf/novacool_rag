@@ -36,7 +36,7 @@ def chunk_text(text, size=CHUNK_SIZE, overlap=CHUNK_OVERLAP):
         start = end - overlap
     return out
 
-# --- NEW: Robust embedding with retry & backoff (handles 429/5xx) ---
+# --- Robust embedding with retry & backoff (handles 429/5xx) ---
 def _sleep_backoff(try_idx, retry_after=None):
     if retry_after:
         try:
@@ -116,7 +116,7 @@ def upload():
     print(f"📁 Uploaded files: {saved}", flush=True)
     return jsonify({"saved": saved})
 
-# ---------- REINDEX (Batch + Backoff) ----------
+# ---------- REINDEX (Batch + Backoff + DOCX skip) ----------
 @app.route("/reindex", methods=["POST"])
 def reindex():
     print("🧩 Starting reindex...", flush=True)
@@ -171,28 +171,51 @@ def reindex():
     print(f"🎉 Reindex complete: {len(all_vecs)} chunks embedded successfully.", flush=True)
     return jsonify({"reindexed_chunks": len(all_vecs)})
 
-# ---------- CRAWL (Backoff on embeddings) ----------
+# ---------- CRAWL (Safe capped + backoff) ----------
 @app.route("/crawl", methods=["POST"])
 def crawl():
     data = request.get_json(silent=True) or {}
     url = data.get("url", "https://novacool.com")
+    print(f"🌐 Crawling {url}...", flush=True)
     try:
         r = requests.get(url, timeout=20)
         r.raise_for_status()
+
+        # Extract visible text
         soup = BeautifulSoup(r.text, "html.parser")
-        for script in soup(["script", "style"]):
-            script.extract()
+        for tag in soup(["script", "style", "noscript"]):
+            tag.decompose()
         text = normspace(soup.get_text())
+
+        # Cap text at 10,000 characters
+        if len(text) > 10000:
+            print(f"⚠️ Page too long ({len(text)} chars) – truncating to 10,000.", flush=True)
+            text = text[:10000]
+
         chunks = chunk_text(text)
+        if not chunks:
+            return jsonify({"error": "No text found"}), 400
+
+        print(f"✅ Retrieved {len(text)} chars of text ({len(chunks)} chunks).", flush=True)
+
+        # Retry embedding with backoff
+        for attempt in range(5):
+            try:
+                vecs = openai_embeddings(chunks)
+                break
+            except Exception as e:
+                print(f"⚠️ Embedding failed attempt {attempt+1}: {e}", flush=True)
+                time.sleep(min(2**attempt, 16))
+        else:
+            return jsonify({"error": "Embedding failed after retries"}), 500
 
         metas = [{"file": f"Crawl:{url}", "text": c} for c in chunks]
-        vecs = openai_embeddings(chunks)
-
         old_m, old_v = load_meta(), load_vecs()
         save_meta(old_m + metas)
         all_vecs = np.vstack([old_v, np.array(vecs, dtype=np.float32)])
         save_vecs(all_vecs)
 
+        print(f"🎉 Crawl complete: {len(chunks)} chunks embedded.", flush=True)
         return jsonify({"message": "Crawl complete", "chunks": len(chunks)})
     except Exception as e:
         print(f"❌ Crawl error: {e}", flush=True)
