@@ -4,7 +4,6 @@ from bs4 import BeautifulSoup
 from docx import Document
 from PyPDF2 import PdfReader
 
-# ---------- CONFIG ----------
 DATA_DIR = "/data"
 UPLOAD_DIR = os.path.join(DATA_DIR, "uploads")
 META_FILE = os.path.join(DATA_DIR, "meta.json")
@@ -19,7 +18,6 @@ EMBED_MODEL = "text-embedding-3-large"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 app = Flask(__name__, template_folder="templates")
 
-# ---------- UTILITIES ----------
 def normspace(s):
     return re.sub(r"\s+", " ", (s or "")).strip()
 
@@ -74,36 +72,23 @@ def openai_embeddings(texts, max_retries=6):
             _sleep_backoff(attempt)
     raise RuntimeError("Embedding failed after retries")
 
-def save_meta(m): 
-    json.dump(m, open(META_FILE, "w", encoding="utf8"))
+def save_meta(m): json.dump(m, open(META_FILE, "w", encoding="utf8"))
+def load_meta(): return json.load(open(META_FILE)) if os.path.exists(META_FILE) else []
+def save_vecs(v): np.save(VECS_FILE, np.array(v, dtype=np.float32))
+def load_vecs(): return np.load(VECS_FILE) if os.path.exists(VECS_FILE) else np.zeros((0, 3072), dtype=np.float32)
 
-def load_meta(): 
-    return json.load(open(META_FILE)) if os.path.exists(META_FILE) else []
-
-def save_vecs(v): 
-    np.save(VECS_FILE, np.array(v, dtype=np.float32))
-
-def load_vecs(): 
-    return np.load(VECS_FILE) if os.path.exists(VECS_FILE) else np.zeros((0, 3072), dtype=np.float32)
-
-# ---------- ROUTES ----------
 @app.route("/")
-def home():
-    return render_template("widget.html")
+def home(): return render_template("widget.html")
 
 @app.route("/widget")
-def widget():
-    return render_template("widget.html")
+def widget(): return render_template("widget.html")
 
 @app.route("/admin/uploader")
-def uploader():
-    return render_template("uploader.html")
+def uploader(): return render_template("uploader.html")
 
 @app.route("/uploads/<path:filename>")
-def get_upload(filename):
-    return send_from_directory(UPLOAD_DIR, filename)
+def get_upload(filename): return send_from_directory(UPLOAD_DIR, filename)
 
-# ---------- UPLOAD ----------
 @app.route("/upload", methods=["POST"])
 def upload():
     files = request.files.getlist("files")
@@ -115,7 +100,6 @@ def upload():
     print(f"📁 Uploaded files: {saved}", flush=True)
     return jsonify({"saved": saved})
 
-# ---------- REINDEX (Batch + Backoff + DOCX skip + delay) ----------
 @app.route("/reindex", methods=["POST"])
 def reindex():
     print("🧩 Starting reindex...", flush=True)
@@ -157,111 +141,26 @@ def reindex():
         batch = texts[i:i+batch_size]
         batch_num = i // batch_size + 1
         print(f"📦 Embedding batch {batch_num}/{batches} ({len(batch)} chunks)...", flush=True)
-        try:
-            vecs = openai_embeddings(batch)
-            all_vecs.extend(vecs)
-            print(f"✅ Completed batch {batch_num}/{batches}", flush=True)
-        except Exception as e:
-            print(f"❌ Error embedding batch {batch_num}: {e}", flush=True)
+        for retry in range(5):
+            try:
+                vecs = openai_embeddings(batch)
+                all_vecs.extend(vecs)
+                print(f"✅ Completed batch {batch_num}/{batches}", flush=True)
+                break
+            except Exception as e:
+                print(f"❌ Error embedding batch {batch_num}, attempt {retry+1}: {type(e).__name__} – {e}", flush=True)
+                if retry < 4:
+                    print("⏳ Waiting 10s before retry...", flush=True)
+                    time.sleep(10)
+                else:
+                    print("🚫 Skipping this batch after 5 failed attempts.", flush=True)
         time.sleep(2)
-
+        batch.clear()
+        del batch
     save_meta(metas)
     save_vecs(all_vecs)
     print(f"🎉 Reindex complete: {len(all_vecs)} chunks embedded successfully.", flush=True)
     return jsonify({"reindexed_chunks": len(all_vecs)})
-
-# ---------- CRAWL (Safe capped + backoff) ----------
-@app.route("/crawl", methods=["POST"])
-def crawl():
-    data = request.get_json(silent=True) or {}
-    url = data.get("url", "https://novacool.com")
-    print(f"🌐 Crawling {url}...", flush=True)
-    try:
-        r = requests.get(url, timeout=20)
-        r.raise_for_status()
-
-        soup = BeautifulSoup(r.text, "html.parser")
-        for tag in soup(["script", "style", "noscript"]):
-            tag.decompose()
-        text = normspace(soup.get_text())
-
-        if len(text) > 10000:
-            print(f"⚠️ Page too long ({len(text)} chars) – truncating to 10,000.", flush=True)
-            text = text[:10000]
-
-        chunks = chunk_text(text)
-        if not chunks:
-            return jsonify({"error": "No text found"}), 400
-
-        print(f"✅ Retrieved {len(text)} chars of text ({len(chunks)} chunks).", flush=True)
-
-        for attempt in range(5):
-            try:
-                vecs = openai_embeddings(chunks)
-                break
-            except Exception as e:
-                print(f"⚠️ Embedding failed attempt {attempt+1}: {e}", flush=True)
-                time.sleep(min(2**attempt, 16))
-        else:
-            return jsonify({"error": "Embedding failed after retries"}), 500
-
-        metas = [{"file": f"Crawl:{url}", "text": c} for c in chunks]
-        old_m, old_v = load_meta(), load_vecs()
-        save_meta(old_m + metas)
-        all_vecs = np.vstack([old_v, np.array(vecs, dtype=np.float32)])
-        save_vecs(all_vecs)
-
-        print(f"🎉 Crawl complete: {len(chunks)} chunks embedded.", flush=True)
-        return jsonify({"message": "Crawl complete", "chunks": len(chunks)})
-    except Exception as e:
-        print(f"❌ Crawl error: {e}", flush=True)
-        return jsonify({"error": str(e)}), 500
-
-# ---------- ASK ----------
-@app.route("/ask", methods=["POST"])
-def ask():
-    data = request.get_json(force=True, silent=True) or {}
-    question = (data.get("question") or "").strip()
-    if not question:
-        return jsonify({"error": "Empty question"}), 400
-    try:
-        vecs, metas = load_vecs(), load_meta()
-        if vecs.shape[0] == 0:
-            return jsonify({"error": "No indexed data yet."}), 400
-
-        q_vec = openai_embeddings([question])[0]
-        sims = np.dot(vecs, q_vec)
-        top_idx = sims.argsort()[-TOP_K:][::-1]
-        top_chunks = [metas[i] for i in top_idx]
-        context = "\n\n".join(c["text"] for c in top_chunks)
-        sources = list({c["file"] for c in top_chunks})
-
-        key = os.getenv("OPENAI_API_KEY", "")
-        if not key:
-            return jsonify({"error": "Missing OPENAI_API_KEY"}), 500
-
-        r = requests.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": CHAT_MODEL,
-                "messages": [
-                    {"role": "system","content": "You are Novacool’s knowledgeable assistant. Cite filenames when relevant."},
-                    {"role": "user","content": f"Context:\n{context}\n\nQuestion: {question}"},
-                ],
-            },
-            timeout=90,
-        )
-        r.raise_for_status()
-        answer = r.json()["choices"][0]["message"]["content"]
-        answer += f"\n\nSources: {', '.join(sources)}"
-        return jsonify({"answer": answer})
-    except Exception as e:
-        print(f"❌ Ask error: {e}", flush=True)
-        return jsonify({"error": f"Backend error: {e}"}), 500
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
