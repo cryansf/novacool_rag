@@ -93,7 +93,7 @@ def upload():
     print(f"📁 Uploaded files: {saved}", flush=True)
     return jsonify({"saved": saved})
 
-# ---------- REINDEX (Enhanced with Batch Logging) ----------
+# ---------- REINDEX (Enhanced with Batch Logging and DOCX Skip) ----------
 @app.route("/reindex", methods=["POST"])
 def reindex():
     print("🧩 Starting reindex...", flush=True)
@@ -108,8 +108,12 @@ def reindex():
         elif fn.lower().endswith(".pdf"):
             text = " ".join(page.extract_text() or "" for page in PdfReader(fp).pages)
         elif fn.lower().endswith(".docx"):
-            doc = Document(fp)
-            text = " ".join(p.text for p in doc.paragraphs)
+            try:
+                doc = Document(fp)
+                text = " ".join(p.text for p in doc.paragraphs)
+            except Exception as e:
+                print(f"⚠️ Skipping bad DOCX {fn}: {e}", flush=True)
+                continue
         else:
             continue
 
