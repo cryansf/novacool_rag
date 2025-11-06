@@ -14,7 +14,7 @@ TOP_K = 5
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 200
 CHAT_MODEL = "gpt-4o-mini"
-EMBED_MODEL = "text-embedding-3-large"  # switched for higher accuracy
+EMBED_MODEL = "text-embedding-3-large"  # higher accuracy
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 app = Flask(__name__, template_folder="templates")
@@ -36,21 +36,44 @@ def chunk_text(text, size=CHUNK_SIZE, overlap=CHUNK_OVERLAP):
         start = end - overlap
     return out
 
-def openai_embeddings(texts):
+# --- NEW: Robust embedding with retry & backoff (handles 429/5xx) ---
+def _sleep_backoff(try_idx, retry_after=None):
+    if retry_after:
+        try:
+            wait = float(retry_after)
+            time.sleep(min(wait, 20.0))
+            return
+        except Exception:
+            pass
+    base = min(2 ** try_idx, 16)
+    time.sleep(base + (0.25 * (try_idx + 1)))
+
+def openai_embeddings(texts, max_retries=6):
     key = os.getenv("OPENAI_API_KEY", "")
     if not key:
         raise RuntimeError("OPENAI_API_KEY not set")
-    r = requests.post(
-        "https://api.openai.com/v1/embeddings",
-        headers={
-            "Authorization": f"Bearer {key}",
-            "Content-Type": "application/json",
-        },
-        json={"model": EMBED_MODEL, "input": texts},
-        timeout=120,
-    )
-    r.raise_for_status()
-    return [x["embedding"] for x in r.json()["data"]]
+    for attempt in range(max_retries):
+        try:
+            r = requests.post(
+                "https://api.openai.com/v1/embeddings",
+                headers={
+                    "Authorization": f"Bearer {key}",
+                    "Content-Type": "application/json",
+                },
+                json={"model": EMBED_MODEL, "input": texts},
+                timeout=120,
+            )
+            if r.status_code in (429, 500, 502, 503, 504):
+                retry_after = r.headers.get("Retry-After")
+                print(f"⚠️ Embedding transient error {r.status_code}. Retrying...", flush=True)
+                _sleep_backoff(attempt, retry_after)
+                continue
+            r.raise_for_status()
+            return [x["embedding"] for x in r.json()["data"]]
+        except requests.exceptions.RequestException as e:
+            print(f"⚠️ Request error on embeddings (attempt {attempt+1}): {e}", flush=True)
+            _sleep_backoff(attempt)
+    raise RuntimeError("Embedding failed after retries")
 
 def save_meta(m): 
     json.dump(m, open(META_FILE, "w", encoding="utf8"))
@@ -93,7 +116,7 @@ def upload():
     print(f"📁 Uploaded files: {saved}", flush=True)
     return jsonify({"saved": saved})
 
-# ---------- REINDEX (Enhanced with Batch Logging and DOCX Skip) ----------
+# ---------- REINDEX (Batch + Backoff) ----------
 @app.route("/reindex", methods=["POST"])
 def reindex():
     print("🧩 Starting reindex...", flush=True)
@@ -127,7 +150,7 @@ def reindex():
         return jsonify({"error": "No files found"}), 400
 
     print(f"🧮 Total chunks to embed: {total_chunks}", flush=True)
-    batch_size = 100
+    batch_size = 50  # smaller batches reduce 429s
     all_vecs = []
     batches = math.ceil(total_chunks / batch_size)
 
@@ -141,19 +164,18 @@ def reindex():
             print(f"✅ Completed batch {batch_num}/{batches}", flush=True)
         except Exception as e:
             print(f"❌ Error embedding batch {batch_num}: {e}", flush=True)
-            time.sleep(3)
+        time.sleep(0.5)
 
     save_meta(metas)
     save_vecs(all_vecs)
     print(f"🎉 Reindex complete: {len(all_vecs)} chunks embedded successfully.", flush=True)
     return jsonify({"reindexed_chunks": len(all_vecs)})
 
-# ---------- CRAWL ----------
+# ---------- CRAWL (Backoff on embeddings) ----------
 @app.route("/crawl", methods=["POST"])
 def crawl():
     data = request.get_json(silent=True) or {}
     url = data.get("url", "https://novacool.com")
-    log = []
     try:
         r = requests.get(url, timeout=20)
         r.raise_for_status()
@@ -162,14 +184,16 @@ def crawl():
             script.extract()
         text = normspace(soup.get_text())
         chunks = chunk_text(text)
+
         metas = [{"file": f"Crawl:{url}", "text": c} for c in chunks]
         vecs = openai_embeddings(chunks)
+
         old_m, old_v = load_meta(), load_vecs()
         save_meta(old_m + metas)
         all_vecs = np.vstack([old_v, np.array(vecs, dtype=np.float32)])
         save_vecs(all_vecs)
-        log.append(f"Crawled {url} with {len(chunks)} chunks.")
-        return jsonify({"message": "Crawl complete", "chunks": len(chunks), "log": log})
+
+        return jsonify({"message": "Crawl complete", "chunks": len(chunks)})
     except Exception as e:
         print(f"❌ Crawl error: {e}", flush=True)
         return jsonify({"error": str(e)}), 500
@@ -206,14 +230,8 @@ def ask():
             json={
                 "model": CHAT_MODEL,
                 "messages": [
-                    {
-                        "role": "system",
-                        "content": "You are Novacool’s knowledgeable assistant. Cite filenames when relevant.",
-                    },
-                    {
-                        "role": "user",
-                        "content": f"Context:\n{context}\n\nQuestion: {question}",
-                    },
+                    {"role": "system","content": "You are Novacool’s knowledgeable assistant. Cite filenames when relevant."},
+                    {"role": "user","content": f"Context:\n{context}\n\nQuestion: {question}"},
                 ],
             },
             timeout=90,
