@@ -5,7 +5,7 @@ from docx import Document
 from PyPDF2 import PdfReader
 
 # ---------- CONFIG ----------
-DATA_DIR = "/data"  # persistent disk mount path on Render
+DATA_DIR = "/data"
 UPLOAD_DIR = os.path.join(DATA_DIR, "uploads")
 META_FILE = os.path.join(DATA_DIR, "meta.json")
 VECS_FILE = os.path.join(DATA_DIR, "vecs.npy")
@@ -14,7 +14,7 @@ TOP_K = 5
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 200
 CHAT_MODEL = "gpt-4o-mini"
-EMBED_MODEL = "text-embedding-3-large"  # higher accuracy
+EMBED_MODEL = "text-embedding-3-large"
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 app = Flask(__name__, template_folder="templates")
@@ -36,7 +36,6 @@ def chunk_text(text, size=CHUNK_SIZE, overlap=CHUNK_OVERLAP):
         start = end - overlap
     return out
 
-# --- Robust embedding with retry & backoff (handles 429/5xx) ---
 def _sleep_backoff(try_idx, retry_after=None):
     if retry_after:
         try:
@@ -116,7 +115,7 @@ def upload():
     print(f"📁 Uploaded files: {saved}", flush=True)
     return jsonify({"saved": saved})
 
-# ---------- REINDEX (Batch + Backoff + DOCX skip) ----------
+# ---------- REINDEX (Batch + Backoff + DOCX skip + delay) ----------
 @app.route("/reindex", methods=["POST"])
 def reindex():
     print("🧩 Starting reindex...", flush=True)
@@ -150,7 +149,7 @@ def reindex():
         return jsonify({"error": "No files found"}), 400
 
     print(f"🧮 Total chunks to embed: {total_chunks}", flush=True)
-    batch_size = 50  # smaller batches reduce 429s
+    batch_size = 25
     all_vecs = []
     batches = math.ceil(total_chunks / batch_size)
 
@@ -164,7 +163,7 @@ def reindex():
             print(f"✅ Completed batch {batch_num}/{batches}", flush=True)
         except Exception as e:
             print(f"❌ Error embedding batch {batch_num}: {e}", flush=True)
-        time.sleep(0.5)
+        time.sleep(2)
 
     save_meta(metas)
     save_vecs(all_vecs)
@@ -181,13 +180,11 @@ def crawl():
         r = requests.get(url, timeout=20)
         r.raise_for_status()
 
-        # Extract visible text
         soup = BeautifulSoup(r.text, "html.parser")
         for tag in soup(["script", "style", "noscript"]):
             tag.decompose()
         text = normspace(soup.get_text())
 
-        # Cap text at 10,000 characters
         if len(text) > 10000:
             print(f"⚠️ Page too long ({len(text)} chars) – truncating to 10,000.", flush=True)
             text = text[:10000]
@@ -198,7 +195,6 @@ def crawl():
 
         print(f"✅ Retrieved {len(text)} chars of text ({len(chunks)} chunks).", flush=True)
 
-        # Retry embedding with backoff
         for attempt in range(5):
             try:
                 vecs = openai_embeddings(chunks)
@@ -267,6 +263,5 @@ def ask():
         print(f"❌ Ask error: {e}", flush=True)
         return jsonify({"error": f"Backend error: {e}"}), 500
 
-# ---------- MAIN ----------
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
