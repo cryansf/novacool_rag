@@ -2,136 +2,224 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Admin Uploader</title>
 <style>
-body {
-  background-color: #0b0b0b;
-  color: white;
-  font-family: Arial, sans-serif;
-  text-align: center;
-  margin: 0;
-  padding: 0;
-}
-h1 {
-  margin-top: 40px;
-}
-button {
-  background-color: #e53935;
-  color: white;
-  border: none;
-  padding: 12px 24px;
-  margin: 10px;
-  border-radius: 8px;
-  font-size: 16px;
-  cursor: pointer;
-  transition: background-color 0.2s ease-in-out;
-}
-button:hover {
-  background-color: #d32f2f;
-}
-button:disabled {
-  background-color: #555;
-  cursor: not-allowed;
-}
-#console {
-  background-color: black;
-  color: white;
-  text-align: left;
-  padding: 10px;
-  margin-top: 20px;
-  font-family: monospace;
-  font-size: 14px;
-  height: 150px;
-  overflow-y: auto;
-  border-top: 2px solid #333;
-}
-.error {
-  color: #ff5252;
-}
+  body {
+    font-family: "Segoe UI", Arial, sans-serif;
+    background: #111;
+    color: #eee;
+    text-align: center;
+    margin: 0;
+    padding: 0;
+  }
+  h1 { margin-top: 40px; color: #fff; }
+  button {
+    background: #e53935;
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    margin: 10px;
+    border-radius: 8px;
+    font-size: 16px;
+    cursor: pointer;
+  }
+  button:disabled { background: #555; cursor: not-allowed; }
+  input[type="file"] {
+    background: #222; border: 1px solid #444; color: #ddd;
+    padding: 8px; border-radius: 6px;
+  }
+  #console {
+    text-align: left; background: #000; color: #0f0;
+    font-family: monospace;
+    padding: 10px; margin: 20px auto;
+    width: 95%; max-width: 1100px;
+    height: 250px; overflow-y: scroll;
+    border: 1px solid #333;
+  }
+  .error { color: #f55; }
+  .warn { color: #ffb347; }
+  .info { color: #6cf; }
+  .success { color: #7fff7f; }
+
+  #progressContainer {
+    width: 80%; max-width: 650px;
+    margin: 20px auto 10px auto;
+    background: #222; border-radius: 8px;
+    border: 1px solid #444;
+    height: 28px; overflow: hidden; position: relative;
+  }
+  #progressBar {
+    height: 100%; width: 0%;
+    transition: width 0.4s ease, background 0.4s ease;
+    background: linear-gradient(90deg, #4caf50, #00e676);
+  }
+  #progressText {
+    position: absolute; top: 4px; left: 0; right: 0;
+    color: #fff; font-size: 14px;
+    text-shadow: 0 0 5px #000;
+  }
+  #timer {
+    font-size: 14px;
+    margin-top: 4px;
+    color: #ccc;
+  }
 </style>
 </head>
 <body>
-<h1>Admin Uploader</h1>
-<div>
-  <input type="file" id="fileInput" multiple />
+  <h1>Admin Uploader</h1>
+  <input id="fileInput" type="file" multiple />
   <button id="uploadBtn">Upload</button>
-</div>
-<div>
+  <br />
   <button id="reindexBtn">Reindex All</button>
   <button id="crawlBtn">Crawl novacool.com</button>
-</div>
-<div id="console"></div>
-<script>
-const log = (msg, cls='') => {
-  const c = document.getElementById('console');
-  const line = document.createElement('div');
-  if (cls) line.classList.add(cls);
-  const t = new Date().toLocaleTimeString();
-  line.textContent = `[${t}] ${msg}`;
-  c.appendChild(line);
-  c.scrollTop = c.scrollHeight;
-};
 
-async function safeFetch(url, options) {
-  try {
-    const r = await fetch(url, options);
-    const text = await r.text();
-    try {
-      return JSON.parse(text);
-    } catch {
-      log('⚠️ Server returned non‑JSON response:', 'error');
-      log(text.slice(0, 200) + '...', 'error');
-      return null;
+  <div id="progressContainer">
+    <div id="progressBar"></div>
+    <div id="progressText">Idle</div>
+  </div>
+  <div id="timer">⏱ Idle</div>
+
+  <div id="console"></div>
+
+  <script>
+    const consoleEl = document.getElementById("console");
+    const fileInput = document.getElementById("fileInput");
+    const uploadBtn = document.getElementById("uploadBtn");
+    const reindexBtn = document.getElementById("reindexBtn");
+    const crawlBtn = document.getElementById("crawlBtn");
+    const progressBar = document.getElementById("progressBar");
+    const progressText = document.getElementById("progressText");
+    const timerEl = document.getElementById("timer");
+
+    function log(msg, type="info") {
+      const time = new Date().toLocaleTimeString();
+      const line = document.createElement("div");
+      line.className = type;
+      line.textContent = `[${time}] ${msg}`;
+      consoleEl.appendChild(line);
+      consoleEl.scrollTop = consoleEl.scrollHeight;
     }
-  } catch (e) {
-    log('❌ Network error: ' + e, 'error');
-    return null;
-  }
-}
 
-document.getElementById('uploadBtn').onclick = async () => {
-  const files = document.getElementById('fileInput').files;
-  if (!files.length) {
-    log('No files selected.', 'error');
-    return;
-  }
-  log('📤 Uploading files...');
-  const fd = new FormData();
-  for (const f of files) fd.append('files', f);
-  document.getElementById('uploadBtn').disabled = true;
-  const res = await safeFetch('/upload', { method: 'POST', body: fd });
-  document.getElementById('uploadBtn').disabled = false;
-  if (res && res.saved) log('✅ Uploaded: ' + JSON.stringify(res.saved));
-  else log('⚠️ Upload failed.', 'error');
-};
+    function setProgress(processed, total, message, state="normal") {
+      const pct = total ? Math.min(100, (processed / total) * 100) : 0;
+      progressBar.style.width = pct + "%";
+      progressText.textContent = total
+        ? `${Math.round(pct)}% (${processed}/${total}) ${message || ""}`
+        : message || "Idle";
 
-document.getElementById('reindexBtn').onclick = async () => {
-  log('🧩 Reindexing started... please wait.');
-  const btn = document.getElementById('reindexBtn');
-  btn.disabled = true;
-  const res = await safeFetch('/reindex', { method: 'POST' });
-  btn.disabled = false;
-  if (res && res.reindexed_chunks !== undefined)
-    log(`✅ Reindex complete: ${res.reindexed_chunks} chunks processed.`);
-  else
-    log('⚠️ Reindex failed or incomplete.', 'error');
-};
+      if (state === "slow")
+        progressBar.style.background = "linear-gradient(90deg, #ffb300, #ffd54f)";
+      else if (state === "error")
+        progressBar.style.background = "linear-gradient(90deg, #f44336, #e53935)";
+      else
+        progressBar.style.background = "linear-gradient(90deg, #4caf50, #00e676)";
+    }
 
-document.getElementById('crawlBtn').onclick = async () => {
-  log('🌐 Crawling site...');
-  const btn = document.getElementById('crawlBtn');
-  btn.disabled = true;
-  const res = await safeFetch('/crawl', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({url: 'https://novacool.com'})
-  });
-  btn.disabled = false;
-  if (res && res.message)
-    log(`✅ ${res.message} (${res.chunks} chunks)`);
-  else
-    log('⚠️ Crawl failed.', 'error');
-};
-</script>
+    function updateTimer(startTime, processed, total, state) {
+      const elapsedSec = Math.floor((Date.now() - startTime) / 1000);
+      const mins = Math.floor(elapsedSec / 60);
+      const secs = elapsedSec % 60;
+      let text = `⏱ Elapsed ${mins}m ${secs}s`;
+
+      if (processed > 0 && total > 0 && processed < total) {
+        const rate = elapsedSec / processed;
+        const remaining = total - processed;
+        const etaSec = Math.round(remaining * rate);
+        const etaMin = Math.floor(etaSec / 60);
+        const etaRem = etaSec % 60;
+        text += ` – ETA ${etaMin}m ${etaRem}s`;
+      }
+
+      if (state === "slow") text += " ⚠️";
+      if (state === "error") text += " ❌";
+      timerEl.textContent = text;
+    }
+
+    async function uploadFiles() {
+      const files = fileInput.files;
+      if (!files.length) return log("No files selected.", "warn");
+      const formData = new FormData();
+      for (let f of files) formData.append("files", f);
+      log("📤 Uploading files...", "info");
+      try {
+        const res = await fetch("/upload", { method: "POST", body: formData });
+        const data = await res.json();
+        log(`✅ Uploaded: ${JSON.stringify(data.saved)}`, "success");
+      } catch (err) {
+        log("❌ Upload failed: " + err, "error");
+      }
+    }
+
+    async function triggerJob(endpoint) {
+      log(`🚀 Triggering ${endpoint} job...`, "info");
+      reindexBtn.disabled = true;
+      crawlBtn.disabled = true;
+      setProgress(0, 0, "Starting...");
+      timerEl.textContent = "⏱ Starting...";
+      try {
+        const res = await fetch(endpoint, { method: "POST" });
+        const data = await res.json();
+        log(data.message || "Job started.", "info");
+        pollStatus();
+      } catch (err) {
+        log("❌ Job trigger failed: " + err, "error");
+        setProgress(0, 0, "Error", "error");
+        timerEl.textContent = "❌ Job failed to start";
+      }
+    }
+
+    async function pollStatus() {
+      let done = false;
+      let startTime = Date.now();
+      let lastProcessed = 0;
+      let stagnationCount = 0;
+
+      while (!done) {
+        try {
+          const res = await fetch("/status");
+          const status = await res.json();
+          const { state, message, processed, total, task } = status;
+          let colorState = "normal";
+
+          if (state === "running" || state === "queued") {
+            if (processed === lastProcessed) stagnationCount++;
+            else stagnationCount = 0;
+            lastProcessed = processed;
+
+            if (stagnationCount > 5 && processed < total) {
+              colorState = "slow";
+              log("⚠️ Slow progress detected. Retrying batches or waiting on API...", "warn");
+            }
+
+            log(`${task || "task"}: ${message} (${processed}/${total})`, "info");
+            setProgress(processed, total, message, colorState);
+            updateTimer(startTime, processed, total, colorState);
+          } 
+          else if (state === "done") {
+            log(`✅ ${task || "Task"} complete: ${message}`, "success");
+            setProgress(total, total, "Complete");
+            updateTimer(startTime, total, total, "normal");
+            done = true;
+          } 
+          else if (state === "error") {
+            log(`❌ ${task || "Task"} error: ${message}`, "error");
+            setProgress(0, 0, "Error", "error");
+            updateTimer(startTime, 0, 0, "error");
+            done = true;
+          }
+        } catch (err) {
+          log("⚠️ Polling failed: " + err, "warn");
+        }
+        await new Promise(r => setTimeout(r, 4000));
+      }
+      reindexBtn.disabled = false;
+      crawlBtn.disabled = false;
+    }
+
+    uploadBtn.onclick = uploadFiles;
+    reindexBtn.onclick = () => triggerJob("/reindex");
+    crawlBtn.onclick = () => triggerJob("/crawl");
+  </script>
 </body>
 </html>
