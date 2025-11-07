@@ -85,6 +85,7 @@
     button:hover { background: #0052a3; }
   </style>
 </head>
+
 <body>
   <div class="chat-widget">
     <div class="header">Novacool Assistant</div>
@@ -95,7 +96,7 @@
     </div>
   </div>
 
-  <!-- External JS file hosted by Flask -->
-  <script src="/static/widget.js"></script>
+  <!-- Load widget.js from Flask's static directory -->
+  <script src="{{ url_for('static', filename='widget.js') }}"></script>
 </body>
 </html>
