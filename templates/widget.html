@@ -54,3 +54,48 @@
       background: #e9eff6;
       align-self: flex-start;
       color: #333;
+    }
+    .user {
+      background: #0066cc;
+      color: #fff;
+      align-self: flex-end;
+    }
+    .input-area {
+      display: flex;
+      border-top: 1px solid #ddd;
+      padding: 8px;
+      background: #fff;
+    }
+    input {
+      flex: 1;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      padding: 8px;
+      font-size: 1em;
+    }
+    button {
+      margin-left: 8px;
+      padding: 8px 14px;
+      border: none;
+      border-radius: 6px;
+      background: #0066cc;
+      color: #fff;
+      cursor: pointer;
+    }
+    button:hover { background: #0052a3; }
+  </style>
+</head>
+<body>
+  <div class="chat-widget">
+    <div class="header">Novacool Assistant</div>
+    <div class="messages" id="messages"></div>
+    <div class="input-area">
+      <input id="userInput" type="text" placeholder="Ask about Novacool..." />
+      <button id="sendBtn">Send</button>
+    </div>
+  </div>
+
+  <!-- External JS file hosted by Flask -->
+  <script src="/static/widget.js"></script>
+</body>
+</html>
