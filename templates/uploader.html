@@ -7,109 +7,185 @@
   <style>
     body {
       font-family: system-ui, sans-serif;
-      background: #f6f9fc;
+      background-color: #f8f9fc;
       color: #222;
       margin: 0;
-      padding: 0;
+      padding: 20px;
       display: flex;
       flex-direction: column;
       align-items: center;
     }
-    h1 {
-      margin: 20px 0;
-    }
-    #uploadForm {
-      background: #fff;
-      padding: 20px;
-      border-radius: 12px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-      width: 90%;
-      max-width: 500px;
-    }
-    input[type="file"] {
-      display: block;
+    .dashboard {
       width: 100%;
+      max-width: 650px;
+      background: #fff;
+      border-radius: 12px;
+      padding: 30px;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+    }
+    h1 {
+      text-align: center;
+      color: #004aad;
+      margin-bottom: 25px;
+    }
+    label {
+      font-weight: 600;
+      display: block;
+      margin-top: 20px;
+      margin-bottom: 6px;
+    }
+    input[type="file"], input[type="text"] {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 1em;
       margin-bottom: 12px;
     }
     button {
       background: #0066cc;
       color: #fff;
       border: none;
-      border-radius: 8px;
+      border-radius: 6px;
       padding: 10px 20px;
-      cursor: pointer;
       font-size: 1em;
-    }
-    button:hover { background: #0052a3; }
-    #status {
-      margin-top: 15px;
-      font-size: 0.9em;
-      color: #555;
-      white-space: pre-wrap;
-    }
-    progress {
+      cursor: pointer;
+      margin-top: 4px;
       width: 100%;
-      height: 20px;
-      margin-top: 10px;
+    }
+    button:hover {
+      background: #0052a3;
+    }
+    .reindex {
+      background: #007bff;
+      margin-top: 15px;
+    }
+    .progress-log {
+      margin-top: 25px;
+      background: #f8f9fb;
+      border-radius: 8px;
+      padding: 10px;
+      height: 150px;
+      overflow-y: auto;
+      font-size: 0.9em;
+      white-space: pre-wrap;
+      border: 1px solid #ddd;
+    }
+    .section {
+      margin-bottom: 20px;
+    }
+    .section h3 {
+      font-size: 1.05em;
+      color: #333;
+      margin-bottom: 10px;
     }
   </style>
 </head>
 <body>
-  <h1>Upload Documents for RAG Indexing</h1>
+  <div class="dashboard">
+    <h1>Uploader Dashboard</h1>
 
-  <form id="uploadForm">
-    <input type="file" id="fileInput" name="files" multiple />
-    <button type="submit">Upload</button>
-    <progress id="progressBar" value="0" max="100" hidden></progress>
-    <div id="status"></div>
-  </form>
+    <!-- UPLOAD SECTION -->
+    <div class="section">
+      <label for="fileInput">📁 Upload a File:</label>
+      <input type="file" id="fileInput" multiple />
+      <button id="uploadBtn">Upload</button>
+    </div>
+
+    <!-- CRAWL SECTION -->
+    <div class="section">
+      <label for="crawlUrl">🌐 Crawl Website (enter base URL):</label>
+      <input type="text" id="crawlUrl" placeholder="https://example.com" />
+      <button id="crawlBtn">Start Crawl</button>
+    </div>
+
+    <!-- REINDEX -->
+    <div class="section">
+      <button class="reindex" id="reindexBtn">🔁 Reindex All Files</button>
+    </div>
+
+    <!-- LOG OUTPUT -->
+    <div class="section">
+      <h3>Live Progress Log</h3>
+      <div id="log" class="progress-log"></div>
+    </div>
+  </div>
 
   <script>
-    const form = document.getElementById("uploadForm");
-    const fileInput = document.getElementById("fileInput");
-    const progressBar = document.getElementById("progressBar");
-    const status = document.getElementById("status");
+    const uploadBtn = document.getElementById('uploadBtn');
+    const fileInput = document.getElementById('fileInput');
+    const log = document.getElementById('log');
+    const crawlBtn = document.getElementById('crawlBtn');
+    const crawlUrl = document.getElementById('crawlUrl');
+    const reindexBtn = document.getElementById('reindexBtn');
 
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
+    function appendLog(message) {
+      log.textContent += message + "\n";
+      log.scrollTop = log.scrollHeight;
+    }
+
+    // Upload handler
+    uploadBtn.addEventListener('click', async () => {
       const files = fileInput.files;
-      if (!files.length) {
-        alert("Please choose at least one file.");
-        return;
-      }
+      if (!files.length) return alert("Please select at least one file.");
 
       const formData = new FormData();
       for (let file of files) formData.append("files", file);
 
-      progressBar.hidden = false;
-      progressBar.value = 0;
-      status.textContent = "Uploading...";
+      appendLog("Uploading " + files.length + " file(s)...");
 
       try {
-        const xhr = new XMLHttpRequest();
-        xhr.open("POST", "/upload");
-        xhr.upload.addEventListener("progress", (e) => {
-          if (e.lengthComputable) {
-            const percent = (e.loaded / e.total) * 100;
-            progressBar.value = percent;
-          }
-        });
-
-        xhr.onload = () => {
-          if (xhr.status === 200) {
-            status.textContent = "✅ Upload complete. Files indexed successfully.";
-          } else {
-            status.textContent = "❌ Upload failed: " + xhr.responseText;
-          }
-        };
-
-        xhr.onerror = () => {
-          status.textContent = "❌ Network or server error.";
-        };
-
-        xhr.send(formData);
+        const res = await fetch("/upload", { method: "POST", body: formData });
+        const text = await res.text();
+        try {
+          const data = JSON.parse(text);
+          appendLog("✅ " + data.status);
+        } catch {
+          appendLog("⚠️ Error fetching status: " + text);
+        }
       } catch (err) {
-        status.textContent = "❌ " + err.message;
+        appendLog("❌ Upload failed: " + err.message);
+      }
+    });
+
+    // Crawl handler
+    crawlBtn.addEventListener('click', async () => {
+      const url = crawlUrl.value.trim();
+      if (!url) return alert("Please enter a URL to crawl.");
+      appendLog("Starting crawl for: " + url);
+
+      try {
+        const res = await fetch("/crawl", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url })
+        });
+        const text = await res.text();
+        try {
+          const data = JSON.parse(text);
+          appendLog("✅ " + data.status);
+        } catch {
+          appendLog("⚠️ Error fetching status: " + text);
+        }
+      } catch (err) {
+        appendLog("❌ Crawl failed: " + err.message);
+      }
+    });
+
+    // Reindex handler
+    reindexBtn.addEventListener('click', async () => {
+      appendLog("🔁 Reindexing all stored documents...");
+      try {
+        const res = await fetch("/reindex", { method: "POST" });
+        const text = await res.text();
+        try {
+          const data = JSON.parse(text);
+          appendLog("✅ " + data.status);
+        } catch {
+          appendLog("⚠️ Error fetching status: " + text);
+        }
+      } catch (err) {
+        appendLog("❌ Reindex failed: " + err.message);
       }
     });
   </script>
