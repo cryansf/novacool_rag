@@ -1,119 +1,135 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Novacool Admin Dashboard</title>
-<style>
-  body { font-family: Arial, sans-serif; background:#111; color:#eee; padding:20px; }
-  h2 { color:#0ff; }
-  #console { background:#000; color:#0f0; padding:10px; height:250px; overflow:auto; border-radius:8px; margin-top:10px; }
-  #console .error { color:#f55; }
-  button, input[type=file] {
-    margin:5px 0; padding:10px; border-radius:6px; border:none; background:#0ff;
-    color:#000; font-weight:bold; cursor:pointer;
-  }
-  button:disabled { background:#555; color:#999; cursor:not-allowed; }
-  #progressBar { width:100%; background:#222; border-radius:8px; overflow:hidden; height:20px; margin-top:10px; }
-  #progressBar div { height:100%; background:#0f0; width:0%; transition:width 0.4s; }
-  #stats { margin-top:15px; background:#222; padding:10px; border-radius:8px; }
-  #stats span { color:#0ff; }
-</style>
+  <meta charset="UTF-8">
+  <title>📤 Document Uploader & Site Crawler</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      background-color: #f7f9fb;
+      color: #222;
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 0 8px rgba(0,0,0,0.1);
+    }
+    h1 { color: #0a66c2; }
+    form {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    input[type="file"],
+    input[type="text"] {
+      padding: 10px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+    }
+    button {
+      background-color: #0a66c2;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 10px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+    button:hover { background-color: #004080; }
+    #log {
+      background: #fff;
+      border-radius: 6px;
+      padding: 12px;
+      min-height: 140px;
+      white-space: pre-wrap;
+      border: 1px solid #ddd;
+      overflow-y: auto;
+    }
+    .status-idle { color: gray; }
+    .status-reindexing { color: #f39c12; }
+    .status-crawling { color: #3498db; }
+    .status-uploaded { color: #2ecc71; }
+    .status-error { color: #e74c3c; }
+  </style>
 </head>
 <body>
-<h2>📁 Novacool Document Upload & Index Manager</h2>
-<input type="file" id="fileInput" />
-<button onclick="uploadFile()">Upload</button>
-<button onclick="reindex()" id="reindexBtn">Reindex All</button>
-<button onclick="resetProgress()">Reset Progress</button>
-<button onclick="fetchStats()">Show Stats</button>
+  <h1>Uploader Dashboard</h1>
 
-<div id="progressBar"><div></div></div>
-<div id="stats">📊 <b>Current Stats:</b> <br>
-Files: <span id="fileCount">-</span> |
-Vectors: <span id="vecCount">-</span> |
-Vector DB Size: <span id="vecSize">-</span>
-</div>
+  <form id="uploadForm">
+    <label>📁 Upload a File:</label>
+    <input type="file" id="fileInput" name="file" required>
+    <button type="submit">Upload</button>
+  </form>
 
-<pre id="console"></pre>
+  <form id="crawlForm">
+    <label>🌐 Crawl Website (enter base URL):</label>
+    <input type="text" id="crawlUrl" placeholder="https://example.com" required>
+    <button type="submit">Start Crawl</button>
+  </form>
 
-<script>
-async function uploadFile() {
-  const f = document.getElementById('fileInput').files[0];
-  if (!f) return alert('Please select a file.');
-  const formData = new FormData();
-  formData.append('file', f);
-  log(`⬆️ Uploading ${f.name}...`);
-  try {
-    const res = await fetch('/upload', { method: 'POST', body: formData });
-    const data = await res.json();
-    if (res.ok) log(data.message);
-    else log('❌ ' + data.error, true);
-  } catch (e) { log('❌ Upload error: ' + e.message, true); }
-}
+  <button id="reindexBtn">🔄 Reindex All Files</button>
 
-async function reindex() {
-  document.getElementById('reindexBtn').disabled = true;
-  log('⚙️ Starting reindex...');
-  try {
-    const res = await fetch('/reindex', { method: 'POST' });
-    if (!res.ok) throw new Error('Server error: ' + res.status);
-    log('Embedding started...');
-    pollProgress();
-  } catch (e) {
-    log('❌ Reindex error: ' + e.message, true);
-    document.getElementById('reindexBtn').disabled = false;
-  }
-}
+  <h3>Live Progress Log</h3>
+  <div id="log">Waiting for updates...</div>
 
-async function resetProgress() {
-  if (!confirm("Reset progress and start over?")) return;
-  log('🧹 Resetting progress...');
-  const res = await fetch('/reset_progress', { method: 'POST' });
-  const data = await res.json();
-  if (res.ok) log(data.message);
-  else log('❌ ' + data.error, true);
-}
+  <script>
+    const logDiv = document.getElementById("log");
 
-async function fetchStats() {
-  try {
-    const res = await fetch('/stats');
-    const s = await res.json();
-    if (s.error) throw new Error(s.error);
-    document.getElementById('fileCount').innerText = s.uploads;
-    document.getElementById('vecCount').innerText = s.vectors;
-    document.getElementById('vecSize').innerText = (s.vec_size/1024).toFixed(1) + " KB";
-    log(`📊 Stats → Files: ${s.uploads}, Vectors: ${s.vectors}, Vecs size: ${(s.vec_size/1024).toFixed(1)} KB`);
-  } catch (e) {
-    log('❌ Failed to fetch stats: ' + e.message, true);
-  }
-}
-
-async function pollProgress() {
-  const progressBar = document.querySelector('#progressBar div');
-  const interval = setInterval(async () => {
-    const res = await fetch('/progress');
-    const data = await res.json();
-    if (data.state === 'idle') return;
-    const pct = data.total ? Math.round((data.processed / data.total) * 100) : 0;
-    progressBar.style.width = pct + '%';
-    log(`[${pct}%] ${data.message}`);
-    if (data.state === 'done' || data.state === 'error') {
-      clearInterval(interval);
-      document.getElementById('reindexBtn').disabled = false;
-      if (data.state === 'done') log('✅ Reindex complete!');
-      else log('❌ ' + data.message, true);
+    async function updateStatus() {
+      try {
+        const res = await fetch("/status");
+        const data = await res.json();
+        const { stage, details } = data;
+        const cls = "status-" + (stage || "idle");
+        logDiv.innerHTML = `<b>Status:</b> <span class="${cls}">${stage}</span><br>${details || ''}`;
+      } catch (e) {
+        logDiv.textContent = "Error fetching status: " + e;
+      }
     }
-  }, 3000);
-}
 
-function log(msg, err = false) {
-  const c = document.getElementById('console');
-  const line = document.createElement('div');
-  line.textContent = msg;
-  if (err) line.className = 'error';
-  c.appendChild(line);
-  c.scrollTop = c.scrollHeight;
-}
-</script>
+    // Upload handler
+    document.getElementById("uploadForm").onsubmit = async e => {
+      e.preventDefault();
+      const file = document.getElementById("fileInput").files[0];
+      if (!file) return alert("Please select a file.");
+      const formData = new FormData();
+      formData.append("file", file);
+      logDiv.textContent = "Uploading...";
+      const res = await fetch("/upload", { method: "POST", body: formData });
+      const result = await res.json();
+      logDiv.textContent = result.message || JSON.stringify(result);
+      updateStatus();
+    };
+
+    // Crawl handler
+    document.getElementById("crawlForm").onsubmit = async e => {
+      e.preventDefault();
+      const url = document.getElementById("crawlUrl").value;
+      logDiv.textContent = `Starting crawl for ${url}...`;
+      const res = await fetch("/crawl", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url })
+      });
+      const result = await res.json();
+      logDiv.textContent = result.message || JSON.stringify(result);
+      updateStatus();
+    };
+
+    // Reindex handler
+    document.getElementById("reindexBtn").onclick = async () => {
+      logDiv.textContent = "Reindexing all uploaded files...";
+      const res = await fetch("/reindex", { method: "POST" });
+      const result = await res.json();
+      logDiv.textContent = result.message || JSON.stringify(result);
+      updateStatus();
+    };
+
+    // Poll status every 3s
+    setInterval(updateStatus, 3000);
+    updateStatus();
+  </script>
 </body>
 </html>
