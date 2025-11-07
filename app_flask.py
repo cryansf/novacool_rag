@@ -6,18 +6,26 @@ from werkzeug.utils import secure_filename
 import requests
 
 # ---------------------------------------------------------------------------
-# Configuration
+# CONFIGURATION
 # ---------------------------------------------------------------------------
 app = Flask(__name__)
 
-UPLOAD_FOLDER = "uploads"
+# Detect environment (Render vs local)
+if os.getenv("RENDER"):
+    # Render persistent disk path
+    UPLOAD_FOLDER = "/data/uploads"
+else:
+    # Local development path
+    UPLOAD_FOLDER = os.path.join(os.getcwd(), "uploads")
+
+# Ensure folder exists
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# Load your OpenAI key from environment variable (Render → Environment)
+# Load OpenAI key
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 # ---------------------------------------------------------------------------
-# Routes
+# ROUTES
 # ---------------------------------------------------------------------------
 
 @app.route("/")
@@ -32,10 +40,7 @@ def uploader_page():
 
 @app.route("/upload", methods=["POST"])
 def upload_files():
-    """
-    Handles multiple file uploads and indexes PDFs (placeholder).
-    Replace indexing section with your actual RAG embedding logic.
-    """
+    """Handles multiple file uploads and indexes PDFs (placeholder)."""
     if "files" not in request.files:
         return jsonify({"status": "No files found in request"}), 400
 
@@ -45,13 +50,12 @@ def upload_files():
     for file in files:
         if not file.filename:
             continue
-
         filename = secure_filename(file.filename)
         save_path = os.path.join(UPLOAD_FOLDER, filename)
         file.save(save_path)
         saved_files.append(save_path)
 
-        # Example indexing placeholder
+        # Placeholder PDF indexing
         if filename.lower().endswith(".pdf"):
             reader = PdfReader(save_path)
             text = ""
@@ -67,9 +71,7 @@ def upload_files():
 
 @app.route("/reindex", methods=["POST"])
 def reindex_all():
-    """
-    Clears and rebuilds your RAG index from uploaded files (placeholder).
-    """
+    """Rebuilds the index from all stored PDFs (placeholder)."""
     try:
         indexed_count = 0
         for filename in os.listdir(UPLOAD_FOLDER):
@@ -88,13 +90,11 @@ def reindex_all():
         print("Reindex error:", e)
         return jsonify({"status": f"Reindex failed: {e}"}), 500
 
-# -------------------------- WEB CRAWLER -------------------------------------
+# -------------------------- WEB CRAWLER (Placeholder) -----------------------
 
 @app.route("/crawl", methods=["POST"])
 def crawl_site():
-    """
-    Crawls a single webpage and (optionally) indexes its text.
-    """
+    """Fetches a webpage and returns status (placeholder for future RAG)."""
     try:
         data = request.get_json(force=True)
         url = data.get("url", "").strip()
@@ -123,7 +123,6 @@ def chat_page():
 def widget_page():
     return render_template("widget.html")
 
-# Optional alias for admin-style URLs
 @app.route("/admin/uploader")
 def admin_uploader_alias():
     return render_template("uploader.html")
@@ -132,16 +131,13 @@ def admin_uploader_alias():
 
 @app.route("/api/chat", methods=["POST"])
 def chat_api():
-    """
-    Primary chat endpoint for /chat and /widget.
-    """
+    """Handles messages from /chat and /widget UIs."""
     try:
         data = request.get_json(force=True)
         user_message = data.get("message", "").strip()
         if not user_message:
             return jsonify({"error": "Empty message"}), 400
 
-        # Call OpenAI model (or your own RAG retrieval chain)
         response = openai.ChatCompletion.create(
             model="gpt-4o-mini",
             messages=[
@@ -152,13 +148,11 @@ def chat_api():
 
         reply = response.choices[0].message["content"].strip()
         return jsonify({"reply": reply})
-
     except Exception as e:
         print("Chat API error:", e)
         return jsonify({"error": str(e)}), 500
 
-# ---------------------------------------------------------------------------
-# MAIN ENTRY
-# ---------------------------------------------------------------------------
+# ----------------------------- MAIN -----------------------------------------
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
