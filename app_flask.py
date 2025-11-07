@@ -172,7 +172,7 @@ def widget_page():
 def admin_uploader_alias():
     return render_template("uploader.html")
 
-# ----------------------------- CHAT API (RAG) -------------------------------
+# ----------------------------- CHAT API (RAG with Sources) ------------------
 
 @app.route("/api/chat", methods=["POST"])
 def chat_api():
@@ -193,8 +193,16 @@ def chat_api():
         result = qa({"question": user_message, "chat_history": []})
         reply = result["answer"]
 
-        # Optional: show sources in logs
-        sources = [doc.metadata.get("source", "unknown") for doc in result.get("source_documents", [])]
+        # --- Source attribution section ---
+        sources = []
+        for doc in result.get("source_documents", []):
+            source = doc.metadata.get("source", "unknown")
+            if source not in sources:
+                sources.append(source)
+
+        if sources:
+            reply += "\n\n📄 **Sources:** " + ", ".join(sources)
+
         print(f"User: {user_message}")
         print(f"Sources: {sources}")
 
