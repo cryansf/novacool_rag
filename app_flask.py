@@ -1,7 +1,8 @@
+# app_flask.py
 from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
 import os
-import openai
+from openai import OpenAI
 from PyPDF2 import PdfReader
 from werkzeug.utils import secure_filename
 import requests
@@ -20,8 +21,8 @@ else:
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# Load OpenAI key
-openai.api_key = os.getenv("OPENAI_API_KEY")
+# Initialize OpenAI client
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # ---------------------------------------------------------------------------
 # ROUTES
@@ -137,7 +138,7 @@ def chat_api():
             return jsonify({"error": "Empty message"}), 400
 
         # --- Core OpenAI Call ---
-        completion = openai.ChatCompletion.create(
+        completion = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": (
@@ -151,12 +152,20 @@ def chat_api():
             max_tokens=300
         )
 
-        reply = completion.choices[0].message["content"].strip()
+        reply = completion.choices[0].message.content.strip()
         return jsonify({"reply": reply})
 
     except Exception as e:
         print("Chat API error:", e)
         return jsonify({"error": str(e)}), 500
+
+# ----------------------------- SECURITY HEADER FIX --------------------------
+
+@app.after_request
+def allow_iframe(response):
+    """Allow embedding in GetResponse or external pages."""
+    response.headers["X-Frame-Options"] = "ALLOWALL"
+    return response
 
 # ----------------------------- MAIN -----------------------------------------
 
