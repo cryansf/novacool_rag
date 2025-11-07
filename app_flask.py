@@ -1,211 +1,142 @@
-import os
-import json
-import threading
-import time
-from flask import Flask, request, jsonify, render_template
-from flask_cors import CORS
-from openai import OpenAI
+import os, re, json, requests, numpy as np
+from flask import Flask, request, jsonify, render_template, send_from_directory
 from bs4 import BeautifulSoup
-import requests
-from PyPDF2 import PdfReader
 from docx import Document
+from PyPDF2 import PdfReader
 
-# ✅ Confirm startup
-print("✅ app_flask.py loaded successfully (background worker enabled)")
-
-# --- Flask setup ---
-app = Flask(__name__)
-CORS(app)
-
-# --- Directories ---
 DATA_DIR = "data"
 UPLOAD_DIR = os.path.join(DATA_DIR, "uploads")
-LOG_FILE = os.path.join(DATA_DIR, "progress.json")
+META_FILE = os.path.join(DATA_DIR, "meta.json")
+VECS_FILE = os.path.join(DATA_DIR, "vecs.npy")
+
+TOP_K = 5
+CHUNK_SIZE = 1000
+CHUNK_OVERLAP = 200
+CHAT_MODEL = "gpt-4o-mini"
+
+app = Flask(__name__, template_folder="templates")
+
+def normspace(s): return re.sub(r"\s+", " ", (s or "")).strip()
+
+def chunk_text(text, size=CHUNK_SIZE, overlap=CHUNK_OVERLAP):
+    t = normspace(text)
+    if not t: return []
+    out, start, L = [], 0, len(t)
+    while start < L:
+        end = min(L, start + size)
+        out.append(t[start:end])
+        if end == L: break
+        start = end - overlap
+    return out
+
+def openai_embeddings(texts):
+    key = os.getenv("OPENAI_API_KEY", "")
+    if not key:
+        raise RuntimeError("OPENAI_API_KEY not set")
+    r = requests.post(
+        "https://api.openai.com/v1/embeddings",
+        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+        json={"model": "text-embedding-3-small", "input": texts},
+        timeout=60,
+    )
+    r.raise_for_status()
+    return [x["embedding"] for x in r.json()["data"]]
+
+def save_meta(m): json.dump(m, open(META_FILE, "w", encoding="utf8"))
+def load_meta(): return json.load(open(META_FILE)) if os.path.exists(META_FILE) else []
+def save_vecs(v): np.save(VECS_FILE, np.array(v, dtype=np.float32))
+def load_vecs(): return np.load(VECS_FILE) if os.path.exists(VECS_FILE) else np.zeros((0, 1536), dtype=np.float32)
+
 os.makedirs(UPLOAD_DIR, exist_ok=True)
-os.makedirs(DATA_DIR, exist_ok=True)
 
-# --- OpenAI client (legacy-compatible stable) ---
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
-# --- Global state ---
-status = {"running": False, "stage": "idle", "details": ""}
-
-
-# ---------- Helpers ----------
-def update_status(stage: str, details: str = ""):
-    """Save current status to /data/progress.json and memory."""
-    status["stage"] = stage
-    status["details"] = details
-    with open(LOG_FILE, "w") as f:
-        json.dump(status, f, indent=2)
-    print(f"[progress] {stage}: {details}")
-
-
-def read_text_from_file(path):
-    """Extract readable text from pdf/docx/txt/html."""
-    ext = os.path.splitext(path)[1].lower()
-    try:
-        if ext == ".pdf":
-            reader = PdfReader(path)
-            return "\n".join(page.extract_text() or "" for page in reader.pages)
-        elif ext == ".docx":
-            doc = Document(path)
-            return "\n".join(p.text for p in doc.paragraphs)
-        elif ext == ".html":
-            with open(path, "r", encoding="utf-8", errors="ignore") as f:
-                soup = BeautifulSoup(f, "html.parser")
-                return soup.get_text(separator="\n")
-        else:
-            with open(path, "r", encoding="utf-8", errors="ignore") as f:
-                return f.read()
-    except Exception as e:
-        return f"[error extracting text from {path}: {e}]"
-
-
-def embed_text(content: str, chunk_size=5000):
-    """Generate embeddings for text content in chunks."""
-    text = content.strip()
-    if not text:
-        return []
-    chunks = [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]
-    embeddings = []
-    for i, chunk in enumerate(chunks, 1):
-        try:
-            resp = client.embeddings.create(
-                input=chunk,
-                model="text-embedding-3-large"
-            )
-            embeddings.append(resp.data[0].embedding)
-            update_status("embedding", f"Chunk {i}/{len(chunks)}")
-            time.sleep(0.2)
-        except Exception as e:
-            update_status("error", f"Embedding failed on chunk {i}: {e}")
-    return embeddings
-
-
-def crawl_website(url, limit=10000):
-    """Recursively crawl and collect plain text from a website."""
-    visited = set()
-    texts = []
-
-    def crawl(u):
-        if len(visited) >= limit:
-            return
-        try:
-            r = requests.get(u, timeout=10)
-            soup = BeautifulSoup(r.text, "html.parser")
-            texts.append(soup.get_text(separator="\n"))
-            visited.add(u)
-            update_status("crawling", f"{len(visited)} pages visited")
-            for link in soup.find_all("a", href=True):
-                full = requests.compat.urljoin(u, link["href"])
-                if full.startswith(url) and full not in visited:
-                    crawl(full)
-        except Exception as e:
-            update_status("error", f"Failed to crawl {u}: {e}")
-
-    crawl(url)
-    return texts
-
-
-# ---------- Background Workers ----------
-def background_reindex():
-    status["running"] = True
-    update_status("reindexing", "Collecting uploaded files")
-    files = [os.path.join(UPLOAD_DIR, f) for f in os.listdir(UPLOAD_DIR)]
-    for i, path in enumerate(files, 1):
-        content = read_text_from_file(path)
-        embed_text(content)
-        update_status("reindexing", f"Processed {i}/{len(files)} files")
-    status["running"] = False
-    update_status("idle", "Reindex complete")
-
-
-def background_crawl(url):
-    status["running"] = True
-    update_status("crawling", f"Starting crawl for {url}")
-    texts = crawl_website(url)
-    combined = "\n\n".join(texts)
-    embed_text(combined)
-    status["running"] = False
-    update_status("idle", f"Crawl complete for {url}")
-
-
-# ---------- Flask Routes ----------
 @app.route("/")
-def home():
-    return jsonify({"message": "Server running ✅"})
+def home(): return render_template("chat.html")
 
+@app.route("/widget")
+def widget(): return render_template("widget.html")
 
-@app.route("/status")
-def get_status():
-    if os.path.exists(LOG_FILE):
-        with open(LOG_FILE) as f:
-            data = json.load(f)
-        return jsonify(data)
-    return jsonify(status)
+@app.route("/admin/uploader")
+def uploader(): return render_template("uploader.html")
 
+@app.route("/uploads/<path:filename>")
+def get_upload(filename): return send_from_directory(UPLOAD_DIR, filename)
 
 @app.route("/upload", methods=["POST"])
-def upload_file():
-    file = request.files.get("file")
-    if not file:
-        return jsonify({"error": "No file provided"}), 400
-    path = os.path.join(UPLOAD_DIR, file.filename)
-    file.save(path)
-    update_status("uploaded", f"File saved: {file.filename}")
-    return jsonify({"message": "File uploaded successfully"})
-
+def upload():
+    files = request.files.getlist("files")
+    saved = []
+    for f in files:
+        path = os.path.join(UPLOAD_DIR, f.filename)
+        f.save(path)
+        saved.append(f.filename)
+    return jsonify({"saved": saved})
 
 @app.route("/reindex", methods=["POST"])
 def reindex():
-    if status["running"]:
-        return jsonify({"error": "Reindex already running"}), 409
-    threading.Thread(target=background_reindex, daemon=True).start()
-    return jsonify({"message": "Reindexing started"})
-
+    texts, metas = [], []
+    for fn in os.listdir(UPLOAD_DIR):
+        fp = os.path.join(UPLOAD_DIR, fn)
+        if fn.lower().endswith(".txt"):
+            text = open(fp, encoding="utf8", errors="ignore").read()
+        elif fn.lower().endswith(".pdf"):
+            text = " ".join(page.extract_text() or "" for page in PdfReader(fp).pages)
+        elif fn.lower().endswith(".docx"):
+            doc = Document(fp); text = " ".join(p.text for p in doc.paragraphs)
+        else: continue
+        for chunk in chunk_text(text):
+            metas.append({"file": fn, "text": chunk}); texts.append(chunk)
+    if not texts: return jsonify({"error": "No files found"}), 400
+    vecs = openai_embeddings(texts); save_meta(metas); save_vecs(vecs)
+    return jsonify({"reindexed_chunks": len(vecs)})
 
 @app.route("/crawl", methods=["POST"])
 def crawl():
-    data = request.get_json(force=True)
-    url = data.get("url")
-    if not url:
-        return jsonify({"error": "Missing 'url'"}), 400
-    if status["running"]:
-        return jsonify({"error": "Another job is running"}), 409
-    threading.Thread(target=background_crawl, args=(url,), daemon=True).start()
-    return jsonify({"message": f"Crawl started for {url}"})
-
+    data = request.get_json(silent=True) or {}
+    url = data.get("url", "https://novacool.com")
+    try:
+        r = requests.get(url, timeout=20); r.raise_for_status()
+        soup = BeautifulSoup(r.text, "html.parser")
+        for s in soup(["script","style"]): s.extract()
+        text = normspace(soup.get_text())
+        chunks = chunk_text(text)
+        metas = [{"file": f"Crawl:{url}", "text": c} for c in chunks]
+        vecs = openai_embeddings(chunks)
+        old_m, old_v = load_meta(), load_vecs()
+        save_meta(old_m + metas)
+        all_vecs = np.vstack([old_v, np.array(vecs, dtype=np.float32)])
+        save_vecs(all_vecs)
+        return jsonify({"message":"Crawl complete","chunks":len(chunks)})
+    except Exception as e:
+        return jsonify({"error":str(e)}),500
 
 @app.route("/ask", methods=["POST"])
 def ask():
-    data = request.get_json(force=True)
-    query = data.get("query", "")
-    if not query:
-        return jsonify({"error": "No query provided"}), 400
-
+    data = request.get_json(force=True, silent=True) or {}
+    question = (data.get("question") or "").strip()
+    if not question: return jsonify({"error": "Empty question"}), 400
     try:
-        # simplified mock query response (no vector store yet)
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "Answer clearly and concisely."},
-                {"role": "user", "content": query}
-            ]
-        )
-        answer = response.choices[0].message.content
+        vecs, metas = load_vecs(), load_meta()
+        if vecs.shape[0] == 0: return jsonify({"error": "No indexed data yet."}), 400
+        q_vec = openai_embeddings([question])[0]
+        sims = np.dot(vecs, q_vec); top_idx = sims.argsort()[-TOP_K:][::-1]
+        top_chunks = [metas[i] for i in top_idx]
+        context = "\n\n".join(c["text"] for c in top_chunks)
+        sources = list({c["file"] for c in top_chunks})
+        key = os.getenv("OPENAI_API_KEY", "")
+        if not key: return jsonify({"error": "Missing OPENAI_API_KEY"}), 500
+        r = requests.post("https://api.openai.com/v1/chat/completions",
+            headers={"Authorization": f"Bearer {key}","Content-Type":"application/json"},
+            json={"model": CHAT_MODEL,
+                "messages":[
+                    {"role":"system","content":"You are Novacool’s assistant. Cite filenames."},
+                    {"role":"user","content": f"Context:\n{context}\n\nQuestion: {question}"}
+                ]},timeout=90)
+        r.raise_for_status()
+        answer = r.json()["choices"][0]["message"]["content"]
+        answer += f"\n\nSources: {', '.join(sources)}"
         return jsonify({"answer": answer})
     except Exception as e:
-        update_status("error", f"Chat failed: {e}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": f"Backend error: {e}"}), 500
 
-
-@app.route("/admin/uploader")
-def uploader_page():
-    return render_template("uploader.html")
-
-
-# ---------- Main ----------
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=10000)
