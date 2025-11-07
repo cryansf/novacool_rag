@@ -1,11 +1,18 @@
-# app_flask.py
 from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
 import os
-from openai import OpenAI
+import openai
 from PyPDF2 import PdfReader
 from werkzeug.utils import secure_filename
+from docx import Document
 import requests
+
+# LangChain components
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain.vectorstores import Chroma
+from langchain.embeddings import OpenAIEmbeddings
+from langchain.chains import ConversationalRetrievalChain
+from langchain.chat_models import ChatOpenAI
 
 # ---------------------------------------------------------------------------
 # CONFIGURATION
@@ -16,13 +23,20 @@ CORS(app)
 # Detect environment (Render vs local)
 if os.getenv("RENDER"):
     UPLOAD_FOLDER = "/data/uploads"
+    DB_FOLDER = "/data/chroma_db"
 else:
     UPLOAD_FOLDER = os.path.join(os.getcwd(), "uploads")
+    DB_FOLDER = os.path.join(os.getcwd(), "chroma_db")
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(DB_FOLDER, exist_ok=True)
 
-# Initialize OpenAI client
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# Load OpenAI key
+openai.api_key = os.getenv("OPENAI_API_KEY")
+
+# Initialize embeddings + persistent Chroma database
+embedding = OpenAIEmbeddings()
+vectorstore = Chroma(persist_directory=DB_FOLDER, embedding_function=embedding)
 
 # ---------------------------------------------------------------------------
 # ROUTES
@@ -40,12 +54,13 @@ def uploader_page():
 
 @app.route("/upload", methods=["POST"])
 def upload_files():
-    """Handles multiple file uploads and indexes PDFs (placeholder)."""
+    """Handles multiple file uploads and indexes PDFs/DOCX into the vectorstore."""
     if "files" not in request.files:
         return jsonify({"status": "No files found in request"}), 400
 
     files = request.files.getlist("files")
     saved_files = []
+    total_chunks = 0
 
     for file in files:
         if not file.filename:
@@ -54,37 +69,68 @@ def upload_files():
         save_path = os.path.join(UPLOAD_FOLDER, filename)
         file.save(save_path)
         saved_files.append(save_path)
+        print(f"Saved {filename}")
 
-        if filename.lower().endswith(".pdf"):
-            reader = PdfReader(save_path)
-            text = ""
-            for page in reader.pages:
-                text += page.extract_text() or ""
-            print(f"Indexed PDF: {filename} ({len(text)} chars)")
-        else:
-            print(f"Saved file {filename}")
+        text = ""
+        try:
+            if filename.lower().endswith(".pdf"):
+                reader = PdfReader(save_path)
+                for page in reader.pages:
+                    text += page.extract_text() or ""
+            elif filename.lower().endswith(".docx"):
+                doc = Document(save_path)
+                for para in doc.paragraphs:
+                    text += para.text + "\n"
 
-    return jsonify({"status": f"{len(saved_files)} file(s) uploaded and indexed successfully."})
+            if text.strip():
+                splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
+                chunks = splitter.split_text(text)
+                vectorstore.add_texts(chunks, metadatas=[{"source": filename}] * len(chunks))
+                vectorstore.persist()
+                total_chunks += len(chunks)
+                print(f"Indexed {filename} into {len(chunks)} chunks.")
+            else:
+                print(f"No text extracted from {filename}")
+
+        except Exception as e:
+            print(f"Failed to process {filename}: {e}")
+
+    return jsonify({
+        "status": f"Uploaded {len(saved_files)} file(s), indexed {total_chunks} text chunks successfully."
+    })
 
 # -------------------------- REINDEX -----------------------------------------
 
 @app.route("/reindex", methods=["POST"])
 def reindex_all():
-    """Rebuilds the index from all stored PDFs (placeholder)."""
+    """Rebuilds the vectorstore from all stored PDFs/DOCX files."""
     try:
-        indexed_count = 0
-        for filename in os.listdir(UPLOAD_FOLDER):
-            if not filename.lower().endswith(".pdf"):
-                continue
-            filepath = os.path.join(UPLOAD_FOLDER, filename)
-            reader = PdfReader(filepath)
-            text = ""
-            for page in reader.pages:
-                text += page.extract_text() or ""
-            indexed_count += 1
-            print(f"Reindexed {filename} ({len(text)} chars)")
+        # Clear old index
+        vectorstore.delete_collection()
+        vectorstore.persist()
+        total_chunks = 0
 
-        return jsonify({"status": f"Reindexed {indexed_count} document(s) successfully."})
+        for filename in os.listdir(UPLOAD_FOLDER):
+            filepath = os.path.join(UPLOAD_FOLDER, filename)
+            text = ""
+
+            if filename.lower().endswith(".pdf"):
+                reader = PdfReader(filepath)
+                for page in reader.pages:
+                    text += page.extract_text() or ""
+            elif filename.lower().endswith(".docx"):
+                doc = Document(filepath)
+                for para in doc.paragraphs:
+                    text += para.text + "\n"
+
+            if text.strip():
+                splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
+                chunks = splitter.split_text(text)
+                vectorstore.add_texts(chunks, metadatas=[{"source": filename}] * len(chunks))
+                total_chunks += len(chunks)
+
+        vectorstore.persist()
+        return jsonify({"status": f"Reindexed {total_chunks} chunks from documents successfully."})
     except Exception as e:
         print("Reindex error:", e)
         return jsonify({"status": f"Reindex failed: {e}"}), 500
@@ -126,46 +172,37 @@ def widget_page():
 def admin_uploader_alias():
     return render_template("uploader.html")
 
-# ----------------------------- CHAT API -------------------------------------
+# ----------------------------- CHAT API (RAG) -------------------------------
 
 @app.route("/api/chat", methods=["POST"])
 def chat_api():
-    """Handles messages from /chat and /widget UIs."""
+    """Handles user chat and retrieves relevant document context from Chroma."""
     try:
         data = request.get_json(force=True)
         user_message = data.get("message", "").strip()
         if not user_message:
             return jsonify({"error": "Empty message"}), 400
 
-        # --- Core OpenAI Call ---
-        completion = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": (
-                    "You are the Novacool AI Assistant. "
-                    "Answer questions about Novacool UEF mix rates, environmental data, "
-                    "certifications, and safety information clearly and concisely."
-                )},
-                {"role": "user", "content": user_message}
-            ],
-            temperature=0.3,
-            max_tokens=300
+        retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
+        qa = ConversationalRetrievalChain.from_llm(
+            ChatOpenAI(model_name="gpt-4o-mini", temperature=0.2),
+            retriever=retriever,
+            return_source_documents=True
         )
 
-        reply = completion.choices[0].message.content.strip()
+        result = qa({"question": user_message, "chat_history": []})
+        reply = result["answer"]
+
+        # Optional: show sources in logs
+        sources = [doc.metadata.get("source", "unknown") for doc in result.get("source_documents", [])]
+        print(f"User: {user_message}")
+        print(f"Sources: {sources}")
+
         return jsonify({"reply": reply})
 
     except Exception as e:
         print("Chat API error:", e)
         return jsonify({"error": str(e)}), 500
-
-# ----------------------------- SECURITY HEADER FIX --------------------------
-
-@app.after_request
-def allow_iframe(response):
-    """Allow embedding in GetResponse or external pages."""
-    response.headers["X-Frame-Options"] = "ALLOWALL"
-    return response
 
 # ----------------------------- MAIN -----------------------------------------
 
