@@ -4,7 +4,7 @@ gunicorn==21.2.0
 
 # --- OpenAI SDK (stable legacy-compatible version) ---
 openai==1.3.5
-
+httpx==0.27.2     # <— pin older version to prevent 'proxies' error
 # --- Data Processing ---
 numpy==1.26.4
 requests==2.31.0
