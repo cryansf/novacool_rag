@@ -115,11 +115,17 @@
       input.value = '';
 
       try {
-        const res = await fetch('/api/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+        const res = await fetch("https://novacool-rag.onrender.com/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ message })
         });
+
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(`HTTP ${res.status}: ${text}`);
+        }
+
         const data = await res.json();
         addMessage(data.reply || data.error || 'No response.', 'bot');
       } catch (err) {
