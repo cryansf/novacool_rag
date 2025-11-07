@@ -1,4 +1,5 @@
 from flask import Flask, render_template, request, jsonify
+from flask_cors import CORS
 import os
 import openai
 from PyPDF2 import PdfReader
@@ -9,16 +10,14 @@ import requests
 # CONFIGURATION
 # ---------------------------------------------------------------------------
 app = Flask(__name__)
+CORS(app)
 
 # Detect environment (Render vs local)
 if os.getenv("RENDER"):
-    # Render persistent disk path
     UPLOAD_FOLDER = "/data/uploads"
 else:
-    # Local development path
     UPLOAD_FOLDER = os.path.join(os.getcwd(), "uploads")
 
-# Ensure folder exists
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # Load OpenAI key
@@ -55,7 +54,6 @@ def upload_files():
         file.save(save_path)
         saved_files.append(save_path)
 
-        # Placeholder PDF indexing
         if filename.lower().endswith(".pdf"):
             reader = PdfReader(save_path)
             text = ""
@@ -138,16 +136,24 @@ def chat_api():
         if not user_message:
             return jsonify({"error": "Empty message"}), 400
 
-        response = openai.ChatCompletion.create(
+        # --- Core OpenAI Call ---
+        completion = openai.ChatCompletion.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are Novacool’s RAG assistant. Be factual and concise."},
+                {"role": "system", "content": (
+                    "You are the Novacool AI Assistant. "
+                    "Answer questions about Novacool UEF mix rates, environmental data, "
+                    "certifications, and safety information clearly and concisely."
+                )},
                 {"role": "user", "content": user_message}
-            ]
+            ],
+            temperature=0.3,
+            max_tokens=300
         )
 
-        reply = response.choices[0].message["content"].strip()
+        reply = completion.choices[0].message["content"].strip()
         return jsonify({"reply": reply})
+
     except Exception as e:
         print("Chat API error:", e)
         return jsonify({"error": str(e)}), 500
