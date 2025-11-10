@@ -3,224 +3,140 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Novacool Knowledge Manager</title>
+  <title>Novacool RAG Uploader</title>
   <style>
     body {
       font-family: system-ui, sans-serif;
-      background: #f6f9fc;
-      color: #222;
+      background: #f8f9fb;
       margin: 0;
-      padding: 0;
+      padding: 2rem;
+      color: #222;
     }
-    h2 {
-      color: #003366;
-      margin-bottom: 0.4em;
-    }
-    .container {
-      max-width: 960px;
-      margin: 40px auto;
-      background: white;
-      padding: 24px 32px;
-      border-radius: 16px;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+    h1, h2 {
+      color: #004aad;
+      margin-bottom: 0.5rem;
     }
     .section {
-      margin-bottom: 36px;
-      padding-bottom: 24px;
-      border-bottom: 1px solid #e0e6ef;
+      background: #fff;
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
     button {
-      background: #0066cc;
+      background: #005ce6;
+      color: white;
       border: none;
-      color: #fff;
-      padding: 10px 18px;
-      border-radius: 8px;
+      padding: 0.6rem 1.2rem;
+      border-radius: 6px;
       cursor: pointer;
-      font-size: 1em;
+      font-size: 1rem;
     }
-    button:hover { background: #004c99; }
-
+    button:hover { background: #0041b8; }
     input[type="file"] {
-      margin-bottom: 12px;
-      font-size: 1em;
+      margin-top: 1rem;
     }
-
     #status {
-      margin-top: 12px;
-      padding: 10px;
-      background: #e9f1ff;
-      border-left: 4px solid #0066cc;
-      border-radius: 4px;
-      white-space: pre-line;
-      font-size: 0.95em;
-    }
-
-    #crawlerProgress {
-      height: 8px;
-      background: #e0e0e0;
-      border-radius: 5px;
-      overflow: hidden;
-      margin: 10px 0;
-    }
-    #crawlerProgress div {
-      height: 100%;
-      background: #0066cc;
-      width: 0%;
-      transition: width 0.3s;
-    }
-
-    iframe {
-      border: none;
-      width: 100%;
-      height: 600px;
-      border-radius: 10px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-    }
-
-    .chat-bubble {
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
-      width: 60px;
-      height: 60px;
-      background: #0066cc;
-      border-radius: 50%;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      cursor: pointer;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
-    }
-    .chat-bubble img {
-      width: 30px;
-      height: 30px;
-      filter: brightness(0) invert(1);
-    }
-
-    .chat-modal {
-      position: fixed;
-      bottom: 90px;
-      right: 30px;
-      width: 400px;
-      height: 500px;
-      background: #fff;
-      border-radius: 10px;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.3);
-      display: none;
-      flex-direction: column;
-      overflow: hidden;
-    }
-    .chat-modal iframe {
-      width: 100%;
-      height: 100%;
-      border: none;
-    }
-    .close-btn {
-      position: absolute;
-      top: 10px;
-      right: 14px;
-      background: transparent;
-      border: none;
-      color: #333;
-      font-size: 1.2em;
-      cursor: pointer;
+      background: #eef5ff;
+      border-left: 4px solid #005ce6;
+      padding: 0.8rem;
+      margin-top: 1rem;
+      font-family: monospace;
+      border-radius: 6px;
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h2>🕷️ Crawl Control Panel</h2>
-    <div class="section">
-      <label for="baseUrl"><strong>Base URL to crawl:</strong></label>
-      <input id="baseUrl" type="text" placeholder="https://novacool.com" style="width:100%; padding:8px; margin:10px 0;">
+  <div class="section">
+    <h1>🕷️ Crawl Control Panel</h1>
+    <label>Base URL to crawl:</label><br/>
+    <input id="crawlUrl" value="https://novacool.com" style="width:80%; padding:0.5rem;" />
+    <div style="margin-top:1rem;">
       <button onclick="startCrawl()">Start Crawl</button>
       <button onclick="pauseCrawl()">Pause / Resume</button>
       <button onclick="stopCrawl()">Stop Crawl</button>
-      <div id="crawlerProgress"><div></div></div>
-      <div id="crawlStatus"></div>
     </div>
+    <div id="crawlStatus" style="margin-top:1rem;">Crawl status: Idle.</div>
+  </div>
 
+  <div class="section">
     <h2>📘 Knowledge Base</h2>
-    <div class="section">
-      <button onclick="downloadFile('manifest')">Download Manifest (JSON)</button>
-      <button onclick="downloadFile('knowledge_base')">Download Knowledge Base (TXT)</button>
-    </div>
+    <button onclick="downloadFile('/data/manifest.json')">Download Manifest (JSON)</button>
+    <button onclick="downloadFile('/data/knowledge_base.txt')">Download Knowledge Base (TXT)</button>
+  </div>
 
+  <div class="section">
     <h2>📤 Upload Documents</h2>
-    <div class="section">
-      <p>Select multiple files (.pdf, .docx, .txt) to add to your knowledge base.</p>
-      <input type="file" id="fileInput" multiple />
-      <button onclick="uploadFiles()">Upload</button>
-      <div id="status">Waiting for uploads...</div>
-    </div>
-  </div>
-
-  <!-- Floating Chat Widget -->
-  <div class="chat-bubble" onclick="toggleChat()">
-    <img src="https://cdn-icons-png.flaticon.com/512/2956/2956729.png" alt="Chat">
-  </div>
-
-  <div class="chat-modal" id="chatModal">
-    <button class="close-btn" onclick="toggleChat()">×</button>
-    <iframe src="/chat"></iframe>
+    <p>Select multiple files (.pdf, .docx, .txt) to add to your knowledge base.</p>
+    <input id="fileInput" type="file" multiple />
+    <button onclick="uploadFiles()">Upload</button>
+    <div id="status">Waiting for uploads...</div>
   </div>
 
   <script>
-    function toggleChat() {
-      const modal = document.getElementById('chatModal');
-      modal.style.display = (modal.style.display === 'flex') ? 'none' : 'flex';
-    }
-
-    async function uploadFiles() {
-      const input = document.getElementById('fileInput');
-      const status = document.getElementById('status');
-      if (!input.files.length) {
-        status.textContent = "No files selected.";
-        return;
-      }
-      status.textContent = `Uploading ${input.files.length} file(s)...`;
-      const formData = new FormData();
-      for (const file of input.files) formData.append("file", file);
-      try {
-        const res = await fetch("/upload", { method: "POST", body: formData });
-        const data = await res.json();
-        status.textContent = data.message || "Upload complete.";
-      } catch (err) {
-        status.textContent = "Upload failed: " + err.message;
-      }
-    }
-
-    function downloadFile(type) {
-      if (type === 'manifest') window.open('/data/manifest.json', '_blank');
-      if (type === 'knowledge_base') window.open('/data/knowledge_base.txt', '_blank');
-    }
-
     async function startCrawl() {
-      const url = document.getElementById('baseUrl').value;
-      const status = document.getElementById('crawlStatus');
-      const bar = document.querySelector('#crawlerProgress div');
-      status.textContent = "Starting crawl...";
+      const url = document.getElementById('crawlUrl').value;
+      document.getElementById('crawlStatus').innerText = "Starting crawl...";
       try {
-        const res = await fetch("/crawler/start?url=" + encodeURIComponent(url));
+        const res = await fetch("/start_crawl", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url })
+        });
         const data = await res.json();
-        status.textContent = data.message || "Crawl started.";
-        bar.style.width = "10%";
+        document.getElementById('crawlStatus').innerText = data.message || "Crawl started.";
       } catch (err) {
-        status.textContent = "Error: " + err.message;
+        document.getElementById('crawlStatus').innerText = "Error: " + err.message;
       }
     }
 
     async function pauseCrawl() {
-      const res = await fetch("/crawler/pause");
-      const data = await res.json();
-      document.getElementById('crawlStatus').textContent = data.message;
+      await fetch("/pause_crawl");
+      document.getElementById('crawlStatus').innerText = "Crawl paused or resumed.";
     }
 
     async function stopCrawl() {
-      const res = await fetch("/crawler/stop");
-      const data = await res.json();
-      document.getElementById('crawlStatus').textContent = data.message;
+      await fetch("/stop_crawl");
+      document.getElementById('crawlStatus').innerText = "Crawl stopped.";
     }
+
+    async function uploadFiles() {
+      const files = document.getElementById("fileInput").files;
+      const status = document.getElementById("status");
+      if (!files.length) {
+        status.innerText = "⚠️ No files selected.";
+        return;
+      }
+
+      status.innerText = `Uploading ${files.length} file(s)...`;
+      for (const file of files) {
+        const formData = new FormData();
+        formData.append("file", file);
+        try {
+          const res = await fetch("/upload", { method: "POST", body: formData });
+          const data = await res.json();
+          status.innerText = data.message || data.error || "Unknown response.";
+        } catch (err) {
+          status.innerText = "Upload error: " + err.message;
+        }
+      }
+    }
+
+    async function downloadFile(path) {
+      window.open(path, "_blank");
+    }
+
+    // Poll crawler status every 5s
+    setInterval(async () => {
+      try {
+        const res = await fetch("/crawler_status");
+        const data = await res.json();
+        document.getElementById('crawlStatus').innerText =
+          `Status: ${data.status} | Active: ${data.active} | Progress: ${data.progress}%`;
+      } catch {
+        // ignore JSON errors during page load
+      }
+    }, 5000);
   </script>
 </body>
 </html>
