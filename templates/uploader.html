@@ -1,219 +1,226 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Novacool Knowledge Base Uploader</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Novacool Knowledge Manager</title>
   <style>
-    * { box-sizing: border-box; }
     body {
       font-family: system-ui, sans-serif;
-      background: #f5f8fa;
+      background: #f6f9fc;
+      color: #222;
       margin: 0;
       padding: 0;
-      color: #333;
     }
-
-    header {
-      background: #0066cc;
-      color: #fff;
-      padding: 20px;
-      text-align: center;
-      font-size: 1.5em;
-      font-weight: 600;
-    }
-
-    .container {
-      max-width: 800px;
-      margin: 40px auto;
-      background: #fff;
-      padding: 30px;
-      border-radius: 12px;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.1);
-    }
-
     h2 {
-      color: #0066cc;
-      margin-bottom: 10px;
+      color: #003366;
+      margin-bottom: 0.4em;
     }
-
-    input[type="file"] {
-      display: block;
-      margin: 20px 0;
-      font-size: 1em;
+    .container {
+      max-width: 960px;
+      margin: 40px auto;
+      background: white;
+      padding: 24px 32px;
+      border-radius: 16px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.15);
     }
-
+    .section {
+      margin-bottom: 36px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid #e0e6ef;
+    }
     button {
       background: #0066cc;
-      color: white;
-      padding: 10px 18px;
       border: none;
-      border-radius: 6px;
+      color: #fff;
+      padding: 10px 18px;
+      border-radius: 8px;
       cursor: pointer;
       font-size: 1em;
     }
-    button:hover { background: #004f9e; }
+    button:hover { background: #004c99; }
 
-    .status {
-      margin-top: 20px;
-      background: #f1f7ff;
+    input[type="file"] {
+      margin-bottom: 12px;
+      font-size: 1em;
+    }
+
+    #status {
+      margin-top: 12px;
+      padding: 10px;
+      background: #e9f1ff;
       border-left: 4px solid #0066cc;
-      padding: 10px 15px;
       border-radius: 4px;
+      white-space: pre-line;
+      font-size: 0.95em;
     }
 
-    /* Floating chat button */
-    #chatButton {
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
-      background: #0066cc;
-      color: #fff;
-      border: none;
-      border-radius: 50%;
-      width: 60px;
-      height: 60px;
-      font-size: 28px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.25);
-      cursor: pointer;
-      transition: transform 0.2s;
-      z-index: 9999;
-    }
-    #chatButton:hover {
-      transform: scale(1.1);
-      background: #0052a3;
-    }
-
-    /* Chat overlay */
-    #chatOverlay {
-      position: fixed;
-      bottom: 0;
-      right: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0,0,0,0.4);
-      display: none;
-      justify-content: center;
-      align-items: center;
-      z-index: 10000;
-    }
-
-    .chat-frame {
-      width: 95%;
-      max-width: 600px;
-      height: 90vh;
-      background: #fff;
-      border-radius: 12px;
+    #crawlerProgress {
+      height: 8px;
+      background: #e0e0e0;
+      border-radius: 5px;
       overflow: hidden;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-      position: relative;
-      animation: fadeInUp 0.3s ease-out;
+      margin: 10px 0;
     }
-
-    @keyframes fadeInUp {
-      from { transform: translateY(50px); opacity: 0; }
-      to { transform: translateY(0); opacity: 1; }
-    }
-
-    #closeChat {
-      position: absolute;
-      top: 8px;
-      right: 12px;
-      background: #fff;
-      color: #333;
-      border: 1px solid #ccc;
-      border-radius: 50%;
-      width: 28px;
-      height: 28px;
-      text-align: center;
-      line-height: 26px;
-      cursor: pointer;
-      font-weight: bold;
-      z-index: 10001;
+    #crawlerProgress div {
+      height: 100%;
+      background: #0066cc;
+      width: 0%;
+      transition: width 0.3s;
     }
 
     iframe {
+      border: none;
+      width: 100%;
+      height: 600px;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+
+    .chat-bubble {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      width: 60px;
+      height: 60px;
+      background: #0066cc;
+      border-radius: 50%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      cursor: pointer;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    }
+    .chat-bubble img {
+      width: 30px;
+      height: 30px;
+      filter: brightness(0) invert(1);
+    }
+
+    .chat-modal {
+      position: fixed;
+      bottom: 90px;
+      right: 30px;
+      width: 400px;
+      height: 500px;
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+      display: none;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .chat-modal iframe {
       width: 100%;
       height: 100%;
       border: none;
+    }
+    .close-btn {
+      position: absolute;
+      top: 10px;
+      right: 14px;
+      background: transparent;
+      border: none;
+      color: #333;
+      font-size: 1.2em;
+      cursor: pointer;
     }
   </style>
 </head>
 <body>
-  <header>Novacool Knowledge Base Uploader</header>
-
   <div class="container">
-    <h2>Upload Documents</h2>
-    <p>Select multiple files (.pdf, .docx, .txt) to add to your knowledge base.</p>
-    <input type="file" id="fileInput" multiple>
-    <button id="uploadBtn">Upload</button>
+    <h2>🕷️ Crawl Control Panel</h2>
+    <div class="section">
+      <label for="baseUrl"><strong>Base URL to crawl:</strong></label>
+      <input id="baseUrl" type="text" placeholder="https://novacool.com" style="width:100%; padding:8px; margin:10px 0;">
+      <button onclick="startCrawl()">Start Crawl</button>
+      <button onclick="pauseCrawl()">Pause / Resume</button>
+      <button onclick="stopCrawl()">Stop Crawl</button>
+      <div id="crawlerProgress"><div></div></div>
+      <div id="crawlStatus"></div>
+    </div>
 
-    <div class="status" id="status">Waiting for uploads...</div>
-  </div>
+    <h2>📘 Knowledge Base</h2>
+    <div class="section">
+      <button onclick="downloadFile('manifest')">Download Manifest (JSON)</button>
+      <button onclick="downloadFile('knowledge_base')">Download Knowledge Base (TXT)</button>
+    </div>
 
-  <!-- Floating chat button -->
-  <button id="chatButton">💬</button>
-
-  <!-- Chat overlay -->
-  <div id="chatOverlay">
-    <div class="chat-frame">
-      <div id="closeChat">×</div>
-      <iframe src="/chat"></iframe>
+    <h2>📤 Upload Documents</h2>
+    <div class="section">
+      <p>Select multiple files (.pdf, .docx, .txt) to add to your knowledge base.</p>
+      <input type="file" id="fileInput" multiple />
+      <button onclick="uploadFiles()">Upload</button>
+      <div id="status">Waiting for uploads...</div>
     </div>
   </div>
 
-  <script>
-    const uploadBtn = document.getElementById("uploadBtn");
-    const fileInput = document.getElementById("fileInput");
-    const statusDiv = document.getElementById("status");
-    const chatButton = document.getElementById("chatButton");
-    const chatOverlay = document.getElementById("chatOverlay");
-    const closeChat = document.getElementById("closeChat");
+  <!-- Floating Chat Widget -->
+  <div class="chat-bubble" onclick="toggleChat()">
+    <img src="https://cdn-icons-png.flaticon.com/512/2956/2956729.png" alt="Chat">
+  </div>
 
-    // --- Upload files ---
-    uploadBtn.addEventListener("click", async () => {
-      const files = fileInput.files;
-      if (!files.length) {
-        alert("Please select files to upload.");
+  <div class="chat-modal" id="chatModal">
+    <button class="close-btn" onclick="toggleChat()">×</button>
+    <iframe src="/chat"></iframe>
+  </div>
+
+  <script>
+    function toggleChat() {
+      const modal = document.getElementById('chatModal');
+      modal.style.display = (modal.style.display === 'flex') ? 'none' : 'flex';
+    }
+
+    async function uploadFiles() {
+      const input = document.getElementById('fileInput');
+      const status = document.getElementById('status');
+      if (!input.files.length) {
+        status.textContent = "No files selected.";
         return;
       }
-
+      status.textContent = `Uploading ${input.files.length} file(s)...`;
       const formData = new FormData();
-      for (let f of files) {
-        formData.append("files", f);
-      }
-
-      statusDiv.textContent = "Uploading " + files.length + " file(s)...";
-
+      for (const file of input.files) formData.append("file", file);
       try {
-        const res = await fetch("/upload", {
-          method: "POST",
-          body: formData
-        });
+        const res = await fetch("/upload", { method: "POST", body: formData });
         const data = await res.json();
-        if (res.ok) {
-          statusDiv.textContent = "✅ " + data.status;
-        } else {
-          statusDiv.textContent = "⚠️ " + (data.error || "Upload failed.");
-        }
+        status.textContent = data.message || "Upload complete.";
       } catch (err) {
-        statusDiv.textContent = "❌ Error: " + err.message;
+        status.textContent = "Upload failed: " + err.message;
       }
-    });
+    }
 
-    // --- Chat button ---
-    chatButton.addEventListener("click", () => {
-      chatOverlay.style.display = "flex";
-    });
+    function downloadFile(type) {
+      if (type === 'manifest') window.open('/data/manifest.json', '_blank');
+      if (type === 'knowledge_base') window.open('/data/knowledge_base.txt', '_blank');
+    }
 
-    closeChat.addEventListener("click", () => {
-      chatOverlay.style.display = "none";
-    });
+    async function startCrawl() {
+      const url = document.getElementById('baseUrl').value;
+      const status = document.getElementById('crawlStatus');
+      const bar = document.querySelector('#crawlerProgress div');
+      status.textContent = "Starting crawl...";
+      try {
+        const res = await fetch("/crawler/start?url=" + encodeURIComponent(url));
+        const data = await res.json();
+        status.textContent = data.message || "Crawl started.";
+        bar.style.width = "10%";
+      } catch (err) {
+        status.textContent = "Error: " + err.message;
+      }
+    }
 
-    // Close chat if user taps outside frame
-    chatOverlay.addEventListener("click", e => {
-      if (e.target === chatOverlay) chatOverlay.style.display = "none";
-    });
+    async function pauseCrawl() {
+      const res = await fetch("/crawler/pause");
+      const data = await res.json();
+      document.getElementById('crawlStatus').textContent = data.message;
+    }
+
+    async function stopCrawl() {
+      const res = await fetch("/crawler/stop");
+      const data = await res.json();
+      document.getElementById('crawlStatus').textContent = data.message;
+    }
   </script>
 </body>
 </html>
