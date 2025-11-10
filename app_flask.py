@@ -1,95 +1,68 @@
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, render_template, request, jsonify, send_from_directory
 from flask_cors import CORS
 import os
 from crawler_controller import CrawlerManager, register_crawler_routes
 
-# --- App setup ---
+# -------------------------------
+# App setup
+# -------------------------------
 app = Flask(__name__)
 CORS(app)
 
-# --- Initialize crawler ---
 crawler = CrawlerManager()
 register_crawler_routes(app, crawler)
 
-# --- Directory setup ---
+# -------------------------------
+# Paths
+# -------------------------------
 DATA_DIR = "data"
 UPLOAD_FOLDER = os.path.join(DATA_DIR, "uploads")
-INDEX_DIR = os.path.join(DATA_DIR, "index")
-MANIFEST_PATH = os.path.join(DATA_DIR, "manifest.json")
-KB_PATH = os.path.join(DATA_DIR, "knowledge_base.txt")
-
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-os.makedirs(INDEX_DIR, exist_ok=True)
 
-# --- Root route ---
+# -------------------------------
+# Home route
+# -------------------------------
 @app.route("/")
 def home():
     return """
     <h2>Novacool RAG Deployment Active 🚀</h2>
     <ul>
-      <li><a href="/uploader">📁 Uploader Dashboard</a></li>
-      <li><a href="/chat">💬 Novacool Assistant Chat</a></li>
-      <li><a href="/widget">🔌 Widget Test</a></li>
+      <li><a href="/uploader">Uploader Interface</a></li>
+      <li><a href="/chat">Chat Assistant</a></li>
+      <li><a href="/widget">Widget</a></li>
     </ul>
     """
 
-# --- File Upload ---
+# -------------------------------
+# File upload route
+# -------------------------------
 @app.route("/upload", methods=["POST"])
-def upload_files():
-    """
-    Accept multiple files (.pdf, .docx, .txt) and save them under /data/uploads.
-    """
-    if "files" not in request.files:
-        return jsonify({"error": "No files part in request"}), 400
+def upload_file():
+    file = request.files.get("file")
+    if not file:
+        return jsonify({"error": "No file uploaded"}), 400
 
-    files = request.files.getlist("files")
-    if not files:
-        return jsonify({"error": "No files uploaded"}), 400
+    save_path = os.path.join(UPLOAD_FOLDER, file.filename)
+    file.save(save_path)
 
-    uploaded = []
-    for file in files:
-        filename = file.filename.strip()
-        if not filename:
-            continue
-        save_path = os.path.join(UPLOAD_FOLDER, filename)
-        file.save(save_path)
-        uploaded.append(filename)
+    # Optional: could trigger reindex automatically later
+    return jsonify({"message": f"{file.filename} uploaded successfully."})
 
-    return jsonify({"status": f"{len(uploaded)} file(s) uploaded successfully.", "files": uploaded})
-
-# --- Simple Reindex (stub for now) ---
+# -------------------------------
+# Reindex endpoint (stub)
+# -------------------------------
 def reindex_knowledge_base():
-    """
-    Stub reindex function — you can later extend this to regenerate embeddings.
-    """
-    if not os.path.exists(KB_PATH):
-        open(KB_PATH, "a").close()
+    # Placeholder for future integration with LangChain retraining
     return "Reindex complete (stub)."
 
 @app.route("/reindex", methods=["POST"])
 def reindex_route():
     msg = reindex_knowledge_base()
-    return jsonify({"status": msg})
+    return jsonify({"message": msg})
 
-# --- Serve Templates ---
-@app.route("/uploader")
-def uploader():
-    return send_from_directory("templates", "uploader.html")
-
-@app.route("/chat")
-def chat():
-    return send_from_directory("templates", "chat.html")
-
-@app.route("/widget")
-def widget():
-    return "<h3>Novacool widget Active — endpoint serving embedded chat widget</h3>"
-
-# --- Serve Uploaded Files ---
-@app.route("/uploads/<path:filename>")
-def serve_upload(filename):
-    return send_from_directory(UPLOAD_FOLDER, filename)
-
-# --- Crawler Status Endpoint ---
+# -------------------------------
+# Crawler status route
+# -------------------------------
 @app.route("/crawler_status")
 def crawler_status():
     return jsonify({
@@ -100,12 +73,24 @@ def crawler_status():
         "status": crawler.status
     })
 
-# --- Health Check ---
-@app.route("/health")
-def health():
-    return jsonify({"status": "ok", "message": "Novacool Flask app running"}), 200
+# -------------------------------
+# Serve front-end interfaces
+# -------------------------------
+@app.route("/uploader")
+def uploader():
+    return send_from_directory("templates", "uploader.html")
 
-# --- Run app ---
+@app.route("/chat")
+def chat():
+    # ✅ Make sure templates/chat.html exists!
+    return send_from_directory("templates", "chat.html")
+
+@app.route("/widget")
+def widget():
+    return "<h3>Novacool widget Active</h3><p>Endpoint will serve the embedded chat interface later.</p>"
+
+# -------------------------------
+# Run server
+# -------------------------------
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=8080)
