@@ -33,9 +33,7 @@
       font-size: 1rem;
     }
     button:hover { background: #0041b8; }
-    input[type="file"] {
-      margin-top: 1rem;
-    }
+    input[type="file"] { margin-top: 1rem; }
     #status {
       background: #eef5ff;
       border-left: 4px solid #005ce6;
@@ -44,9 +42,19 @@
       font-family: monospace;
       border-radius: 6px;
     }
+    #storageBox {
+      background: #eef5ff;
+      border-left: 4px solid #00914c;
+      padding: 0.8rem;
+      font-family: monospace;
+      border-radius: 6px;
+      margin-top: 1rem;
+      white-space: pre-wrap;
+    }
   </style>
 </head>
 <body>
+  <!-- ──────────────────────  CRAWL CONTROL  ────────────────────── -->
   <div class="section">
     <h1>🕷️ Crawl Control Panel</h1>
     <label>Base URL to crawl:</label><br/>
@@ -59,12 +67,14 @@
     <div id="crawlStatus" style="margin-top:1rem;">Crawl status: Idle.</div>
   </div>
 
+  <!-- ──────────────────────  KNOWLEDGE BASE  ────────────────────── -->
   <div class="section">
     <h2>📘 Knowledge Base</h2>
     <button onclick="downloadFile('/data/manifest.json')">Download Manifest (JSON)</button>
     <button onclick="downloadFile('/data/knowledge_base.txt')">Download Knowledge Base (TXT)</button>
   </div>
 
+  <!-- ──────────────────────  UPLOADER  ────────────────────── -->
   <div class="section">
     <h2>📤 Upload Documents</h2>
     <p>Select multiple files (.pdf, .docx, .txt) to add to your knowledge base.</p>
@@ -73,7 +83,15 @@
     <div id="status">Waiting for uploads...</div>
   </div>
 
+  <!-- ──────────────────────  STORAGE DASHBOARD  ────────────────────── -->
+  <div class="section">
+    <h2>📊 Persistent Storage Dashboard</h2>
+    <button onclick="refreshStorage()">🔄 Refresh Storage Info</button>
+    <div id="storageBox">Checking persistent disk...</div>
+  </div>
+
   <script>
+    // ────────────────  Crawl control  ────────────────
     async function startCrawl() {
       const url = document.getElementById('crawlUrl').value;
       document.getElementById('crawlStatus').innerText = "Starting crawl...";
@@ -100,6 +118,7 @@
       document.getElementById('crawlStatus').innerText = "Crawl stopped.";
     }
 
+    // ────────────────  Upload section  ────────────────
     async function uploadFiles() {
       const files = document.getElementById("fileInput").files;
       const status = document.getElementById("status");
@@ -120,13 +139,14 @@
           status.innerText = "Upload error: " + err.message;
         }
       }
+      refreshStorage(); // refresh after upload
     }
 
-    async function downloadFile(path) {
+    function downloadFile(path) {
       window.open(path, "_blank");
     }
 
-    // Poll crawler status every 5s
+    // ────────────────  Crawler status polling  ────────────────
     setInterval(async () => {
       try {
         const res = await fetch("/crawler_status");
@@ -137,6 +157,26 @@
         // ignore JSON errors during page load
       }
     }, 5000);
+
+    // ────────────────  Persistent storage dashboard  ────────────────
+    async function refreshStorage() {
+      const box = document.getElementById("storageBox");
+      try {
+        const res = await fetch("/status");
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        box.textContent =
+          `📁 Data Dir: ${data.data_dir}\n` +
+          `📂 Upload Folder: ${data.upload_folder}\n` +
+          `📦 File Count: ${data.file_count}\n\n` +
+          `Files:\n${(data.files || []).join("\n") || "None"}`;
+      } catch (err) {
+        box.textContent = "⚠️ Error fetching storage info: " + err.message;
+      }
+    }
+
+    refreshStorage();
+    setInterval(refreshStorage, 10000); // auto-refresh every 10s
   </script>
 </body>
 </html>
