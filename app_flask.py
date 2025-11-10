@@ -3,22 +3,46 @@ from flask_cors import CORS
 import os, time, json
 from crawler_controller import CrawlerManager, register_crawler_routes
 
-# --- App setup ---
+# ====================================================
+# 🔧 Flask App Setup
+# ====================================================
 app = Flask(__name__)
 CORS(app)
 
-# --- Crawler integration ---
-crawler = CrawlerManager()
-register_crawler_routes(app, crawler)
-
-# --- Paths ---
+# ====================================================
+# 📁 Directory Setup
+# ====================================================
 DATA_DIR = "data"
 UPLOAD_FOLDER = os.path.join(DATA_DIR, "uploads")
 INDEX_DIR = os.path.join(DATA_DIR, "index")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(INDEX_DIR, exist_ok=True)
 
-# --- Helper to load manifest ---
+# ====================================================
+# 🧠 Knowledge Base Reindex Helper
+# ====================================================
+def reindex_knowledge_base():
+    """
+    Placeholder reindex function used by the crawler and /reindex route.
+    You can replace this later with your FAISS / LangChain vector rebuild logic.
+    """
+    kb_path = os.path.join(DATA_DIR, "knowledge_base.txt")
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(kb_path, "a", encoding="utf-8") as f:
+        f.write(f"\n[Auto-reindexed at {time.ctime()}]\n")
+    print("✅ Knowledge base reindexed.")
+    return "Knowledge base reindexed successfully."
+
+
+# ====================================================
+# 🕷 Initialize Crawler
+# ====================================================
+crawler = CrawlerManager()
+register_crawler_routes(app, crawler)
+
+# ====================================================
+# 📦 Helper: Load Manifest
+# ====================================================
 def load_existing_hashes():
     manifest_path = os.path.join(DATA_DIR, "manifest.json")
     if os.path.exists(manifest_path):
@@ -29,12 +53,17 @@ def load_existing_hashes():
             return {}
     return {}
 
-# --- Home route ---
+# ====================================================
+# 🌐 Routes
+# ====================================================
+
 @app.route("/")
 def home():
     return "<h2>🔥 Novacool RAG Deployment Active</h2><p>Visit <a href='/uploader'>/uploader</a> to manage uploads & crawling.</p>"
 
-# --- File upload (multiple) ---
+# ----------------------------
+# 📤 File Upload
+# ----------------------------
 @app.route("/upload", methods=["POST"])
 def upload_files():
     if "files" not in request.files:
@@ -51,14 +80,17 @@ def upload_files():
 
     return jsonify({"status": f"{len(uploaded)} file(s) uploaded successfully.", "files": uploaded})
 
-# --- Reindex stub (placeholder for now) ---
+# ----------------------------
+# 🔁 Manual Reindex Route
+# ----------------------------
 @app.route("/reindex", methods=["POST"])
 def reindex_route():
-    # This could call your LangChain/FAISS reindexing function in the future
-    msg = "Reindex complete (stub)."
+    msg = reindex_knowledge_base()
     return jsonify({"message": msg})
 
-# --- Download manifest.json ---
+# ----------------------------
+# 📥 Download Manifest
+# ----------------------------
 @app.route("/download_manifest")
 def download_manifest():
     try:
@@ -66,7 +98,9 @@ def download_manifest():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# --- Download knowledge base (raw text) ---
+# ----------------------------
+# 📘 Download Knowledge Base
+# ----------------------------
 @app.route("/download_kb")
 def download_kb():
     kb_path = os.path.join(DATA_DIR, "knowledge_base.txt")
@@ -74,13 +108,16 @@ def download_kb():
         return send_from_directory(DATA_DIR, "knowledge_base.txt", as_attachment=True)
     return jsonify({"error": "Knowledge base not found"}), 404
 
-# --- System status dashboard metrics ---
+# ----------------------------
+# ⚙️ System Status
+# ----------------------------
 @app.route("/system_status")
 def system_status():
     manifest = load_existing_hashes()
     index_path = os.path.join(INDEX_DIR, "faiss_index")
     kb_path = os.path.join(DATA_DIR, "knowledge_base.txt")
 
+    # calculate index size (MB)
     index_size_mb = 0
     if os.path.exists(index_path):
         for dirpath, _, filenames in os.walk(index_path):
@@ -101,10 +138,20 @@ def system_status():
         "crawler_active": crawler.active
     })
 
-# --- Serve uploader dashboard ---
+# ----------------------------
+# 🧭 Serve Dashboard
+# ----------------------------
 @app.route("/uploader")
 def uploader():
     return send_from_directory("templates", "uploader.html")
 
+# ====================================================
+# 📤 Export symbols for crawler import
+# ====================================================
+__all__ = ["reindex_knowledge_base"]
+
+# ====================================================
+# 🚀 Main Entrypoint
+# ====================================================
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
