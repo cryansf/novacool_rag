@@ -72,4 +72,137 @@
       align-self: flex-end;
     }
 
-    .inp
+    .input-area {
+      display: flex;
+      border-top: 1px solid #ddd;
+      padding: 10px;
+      background: #fff;
+      flex-shrink: 0;
+    }
+
+    input {
+      flex: 1;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      padding: 10px;
+      font-size: 1em;
+    }
+
+    button {
+      margin-left: 10px;
+      padding: 10px 16px;
+      border: none;
+      border-radius: 6px;
+      background: #0066cc;
+      color: #fff;
+      cursor: pointer;
+      font-size: 1em;
+    }
+    button:hover { background: #0052a3; }
+
+    /* --- Mobile / landscape adjustments --- */
+    @media (max-width: 700px) {
+      .chat-container {
+        width: 100%;
+        height: 100vh;
+        border-radius: 0;
+        max-width: none;
+        max-height: none;
+      }
+    }
+
+    @media (orientation: landscape) and (max-height: 500px) {
+      .chat-container {
+        height: 100vw;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="chat-container">
+    <div class="header">Novacool Assistant</div>
+    <div class="messages" id="messages"></div>
+    <div class="input-area">
+      <input id="userInput" type="text" placeholder="Ask me about Novacool..." />
+      <button id="sendBtn">Send</button>
+    </div>
+  </div>
+
+  <script>
+    const messagesDiv = document.getElementById('messages');
+    const input = document.getElementById('userInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const STORAGE_KEY = "novacool_chat_history";
+
+    // --- Helper: Add message to UI ---
+    function addMessage(text, sender) {
+      const msg = document.createElement('div');
+      msg.classList.add('message', sender);
+      msg.textContent = text;
+      messagesDiv.appendChild(msg);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
+    // --- Helper: Save chat to localStorage ---
+    function saveChat() {
+      const allMessages = Array.from(messagesDiv.children).map(el => ({
+        text: el.textContent,
+        sender: el.classList.contains('user') ? 'user' : 'bot'
+      }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(allMessages));
+    }
+
+    // --- Load chat from localStorage on startup ---
+    function loadChat() {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (!stored) return;
+      try {
+        const history = JSON.parse(stored);
+        for (let msg of history) {
+          addMessage(msg.text, msg.sender);
+        }
+      } catch (e) {
+        console.warn("Error parsing chat history:", e);
+      }
+    }
+
+    // --- Send message handler ---
+    async function sendMessage() {
+      const message = input.value.trim();
+      if (!message) return;
+      addMessage(message, 'user');
+      input.value = '';
+      saveChat();
+
+      try {
+        const res = await fetch("https://novacool-rag.onrender.com/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message })
+        });
+
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(`HTTP ${res.status}: ${text}`);
+        }
+
+        const data = await res.json();
+        const reply = data.reply || data.error || "No response from server.";
+        addMessage(reply, "bot");
+        saveChat();
+      } catch (err) {
+        addMessage("Error: " + err.message, "bot");
+        saveChat();
+      }
+    }
+
+    sendBtn.addEventListener("click", sendMessage);
+    input.addEventListener("keypress", e => {
+      if (e.key === "Enter") sendMessage();
+    });
+
+    // --- Load previous chat when opened ---
+    loadChat();
+  </script>
+</body>
+</html>
