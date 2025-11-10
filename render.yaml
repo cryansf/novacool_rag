@@ -11,3 +11,4 @@ services:
     envVars:
       - key: OPENAI_API_KEY
         sync: false
+
