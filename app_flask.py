@@ -1,220 +1,111 @@
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
-import os, time, json
+import os
 from crawler_controller import CrawlerManager, register_crawler_routes
-from openai import OpenAI
 
-# ====================================================
-# 🔧 Flask App Setup
-# ====================================================
+# --- App setup ---
 app = Flask(__name__)
 CORS(app)
 
-# Initialize OpenAI client
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
-# ====================================================
-# 📁 Directory Setup
-# ====================================================
-DATA_DIR = "data"
-UPLOAD_FOLDER = os.path.join(DATA_DIR, "uploads")
-INDEX_DIR = os.path.join(DATA_DIR, "index")
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-os.makedirs(INDEX_DIR, exist_ok=True)
-
-# ====================================================
-# 🧠 Knowledge Base Reindex Helper
-# ====================================================
-def reindex_knowledge_base():
-    """
-    Placeholder reindex function used by the crawler and /reindex route.
-    You can replace this later with a FAISS / LangChain vector rebuild logic.
-    """
-    kb_path = os.path.join(DATA_DIR, "knowledge_base.txt")
-    os.makedirs(DATA_DIR, exist_ok=True)
-    with open(kb_path, "a", encoding="utf-8") as f:
-        f.write(f"\n[Auto-reindexed at {time.ctime()}]\n")
-    print("✅ Knowledge base reindexed.")
-    return "Knowledge base reindexed successfully."
-
-
-# ====================================================
-# 🕷 Initialize Crawler
-# ====================================================
+# --- Initialize crawler ---
 crawler = CrawlerManager()
 register_crawler_routes(app, crawler)
 
-# ====================================================
-# 📦 Helper: Load Manifest
-# ====================================================
-def load_existing_hashes():
-    manifest_path = os.path.join(DATA_DIR, "manifest.json")
-    if os.path.exists(manifest_path):
-        try:
-            with open(manifest_path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            return {}
-    return {}
+# --- Directory setup ---
+DATA_DIR = "data"
+UPLOAD_FOLDER = os.path.join(DATA_DIR, "uploads")
+INDEX_DIR = os.path.join(DATA_DIR, "index")
+MANIFEST_PATH = os.path.join(DATA_DIR, "manifest.json")
+KB_PATH = os.path.join(DATA_DIR, "knowledge_base.txt")
 
-# ====================================================
-# 🧾 Helper: Load Knowledge Base
-# ====================================================
-def load_knowledge_base():
-    kb_path = os.path.join(DATA_DIR, "knowledge_base.txt")
-    if os.path.exists(kb_path):
-        with open(kb_path, "r", encoding="utf-8") as f:
-            return f.read()
-    return "Knowledge base is currently empty."
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(INDEX_DIR, exist_ok=True)
 
-
-# ====================================================
-# 🌐 ROUTES
-# ====================================================
-
+# --- Root route ---
 @app.route("/")
 def home():
-    return "<h2>🔥 Novacool RAG Deployment Active</h2><p>Visit <a href='/uploader'>/uploader</a> or <a href='/chat'>/chat</a>.</p>"
+    return """
+    <h2>Novacool RAG Deployment Active 🚀</h2>
+    <ul>
+      <li><a href="/uploader">📁 Uploader Dashboard</a></li>
+      <li><a href="/chat">💬 Novacool Assistant Chat</a></li>
+      <li><a href="/widget">🔌 Widget Test</a></li>
+    </ul>
+    """
 
-# ----------------------------
-# 📤 File Upload
-# ----------------------------
+# --- File Upload ---
 @app.route("/upload", methods=["POST"])
 def upload_files():
+    """
+    Accept multiple files (.pdf, .docx, .txt) and save them under /data/uploads.
+    """
     if "files" not in request.files:
-        return jsonify({"error": "No files provided"}), 400
+        return jsonify({"error": "No files part in request"}), 400
+
+    files = request.files.getlist("files")
+    if not files:
+        return jsonify({"error": "No files uploaded"}), 400
 
     uploaded = []
-    for file in request.files.getlist("files"):
-        filename = file.filename
+    for file in files:
+        filename = file.filename.strip()
         if not filename:
             continue
-        path = os.path.join(UPLOAD_FOLDER, filename)
-        file.save(path)
+        save_path = os.path.join(UPLOAD_FOLDER, filename)
+        file.save(save_path)
         uploaded.append(filename)
 
     return jsonify({"status": f"{len(uploaded)} file(s) uploaded successfully.", "files": uploaded})
 
-# ----------------------------
-# 🔁 Manual Reindex Route
-# ----------------------------
+# --- Simple Reindex (stub for now) ---
+def reindex_knowledge_base():
+    """
+    Stub reindex function — you can later extend this to regenerate embeddings.
+    """
+    if not os.path.exists(KB_PATH):
+        open(KB_PATH, "a").close()
+    return "Reindex complete (stub)."
+
 @app.route("/reindex", methods=["POST"])
 def reindex_route():
     msg = reindex_knowledge_base()
-    return jsonify({"message": msg})
+    return jsonify({"status": msg})
 
-# ----------------------------
-# 📥 Download Manifest
-# ----------------------------
-@app.route("/download_manifest")
-def download_manifest():
-    try:
-        return send_from_directory(DATA_DIR, "manifest.json", as_attachment=True)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-# ----------------------------
-# 📘 Download Knowledge Base
-# ----------------------------
-@app.route("/download_kb")
-def download_kb():
-    kb_path = os.path.join(DATA_DIR, "knowledge_base.txt")
-    if os.path.exists(kb_path):
-        return send_from_directory(DATA_DIR, "knowledge_base.txt", as_attachment=True)
-    return jsonify({"error": "Knowledge base not found"}), 404
-
-# ----------------------------
-# ⚙️ System Status
-# ----------------------------
-@app.route("/system_status")
-def system_status():
-    manifest = load_existing_hashes()
-    index_path = os.path.join(INDEX_DIR, "faiss_index")
-    kb_path = os.path.join(DATA_DIR, "knowledge_base.txt")
-
-    index_size_mb = 0
-    if os.path.exists(index_path):
-        for dirpath, _, filenames in os.walk(index_path):
-            for f in filenames:
-                fp = os.path.join(dirpath, f)
-                index_size_mb += os.path.getsize(fp)
-        index_size_mb = round(index_size_mb / (1024 * 1024), 2)
-
-    kb_exists = os.path.exists(kb_path)
-    kb_mtime = time.ctime(os.path.getmtime(kb_path)) if kb_exists else "N/A"
-
-    return jsonify({
-        "indexed_files": len(manifest),
-        "upload_dir_files": len(os.listdir(UPLOAD_FOLDER)),
-        "index_size_mb": index_size_mb,
-        "knowledge_base_exists": kb_exists,
-        "last_reindex": kb_mtime,
-        "crawler_active": crawler.active
-    })
-
-# ----------------------------
-# 🧭 Serve Dashboard
-# ----------------------------
+# --- Serve Templates ---
 @app.route("/uploader")
 def uploader():
     return send_from_directory("templates", "uploader.html")
 
-# ----------------------------
-# 💬 Chat Endpoint (AI-powered)
-# ----------------------------
-@app.route("/chat", methods=["GET", "POST"])
+@app.route("/chat")
 def chat():
-    if request.method == "GET":
-        return """
-        <h2>🧠 Novacool Chat Interface</h2>
-        <form method='POST'>
-          <input name='user_input' placeholder='Ask about Novacool...' style='width:70%'/>
-          <button>Ask</button>
-        </form>
-        """
+    return send_from_directory("templates", "chat.html")
 
-    user_input = request.form.get("user_input", "").strip()
-    if not user_input:
-        return "Please enter a message."
-
-    # Load KB context
-    context = load_knowledge_base()
-
-    # Query OpenAI model
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": "You are NovacoolGPT, an assistant knowledgeable about firefighting foam, Novacool UEF, and related safety and technical information."},
-            {"role": "user", "content": f"Context:\n{context}\n\nUser Question:\n{user_input}"}
-        ],
-        temperature=0.4,
-    )
-
-    answer = response.choices[0].message.content.strip()
-
-    return f"""
-    <p><b>You asked:</b> {user_input}</p>
-    <p><b>NovacoolGPT:</b> {answer}</p>
-    <hr><a href='/chat'>Ask another question</a>
-    """
-
-# ----------------------------
-# 💬 Widget Placeholder (future embedded chat)
-# ----------------------------
 @app.route("/widget")
 def widget():
-    return """
-    <h3>Novacool Widget Active</h3>
-    <p>This endpoint will serve the embedded chat widget later.</p>
-    """
+    return "<h3>Novacool widget Active — endpoint serving embedded chat widget</h3>"
 
-# ====================================================
-# 📤 Export symbols for crawler import
-# ====================================================
-__all__ = ["reindex_knowledge_base"]
+# --- Serve Uploaded Files ---
+@app.route("/uploads/<path:filename>")
+def serve_upload(filename):
+    return send_from_directory(UPLOAD_FOLDER, filename)
 
-# ====================================================
-# 🚀 Main Entrypoint
-# ====================================================
+# --- Crawler Status Endpoint ---
+@app.route("/crawler_status")
+def crawler_status():
+    return jsonify({
+        "active": crawler.active,
+        "paused": crawler.paused,
+        "stopped": crawler.stopped,
+        "progress": crawler.progress,
+        "status": crawler.status
+    })
+
+# --- Health Check ---
+@app.route("/health")
+def health():
+    return jsonify({"status": "ok", "message": "Novacool Flask app running"}), 200
+
+# --- Run app ---
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8080)
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host="0.0.0.0", port=port)
