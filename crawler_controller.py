@@ -2,11 +2,11 @@ import os
 import threading
 import time
 import requests
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin
 from bs4 import BeautifulSoup
+from flask import current_app, jsonify, request
 
-# Import the Flask app so we can safely use its context later
-from app_flask import app, reindex_knowledge_base
+# We no longer import from app_flask here to avoid circular import
 
 
 class CrawlerManager:
@@ -85,7 +85,7 @@ class CrawlerManager:
                         kb.write(f"\n\n# {url}\n{text}\n")
 
                     pages.append(url)
-                    self.progress = int((len(visited) / 50) * 100)  # simple progress estimate
+                    self.progress = int((len(visited) / 50) * 100)
 
                     # Discover internal links
                     for a in soup.find_all("a", href=True):
@@ -99,15 +99,14 @@ class CrawlerManager:
 
                 time.sleep(0.5)
 
-            # When finished
+            # --- When finished ---
             self.status = f"Crawl finished. {len(pages)} pages added."
             self.active = False
             self.progress = min(100, self.progress)
 
-            # ----------------------------------------------------------
-            # Safe reindex call — now inside a Flask app context
-            # ----------------------------------------------------------
-            with app.app_context():
+            # Reindex safely inside app context (no circular import)
+            from app_flask import reindex_knowledge_base
+            with current_app.app_context():
                 try:
                     reindex_knowledge_base()
                     self.status += " Reindex complete."
@@ -119,6 +118,7 @@ class CrawlerManager:
             self.active = False
         finally:
             self.active = False
+
 
 # ---------------------------------------------------------------------
 # Route registration helper
