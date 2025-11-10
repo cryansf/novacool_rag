@@ -2,12 +2,16 @@ from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import os, time, json
 from crawler_controller import CrawlerManager, register_crawler_routes
+from openai import OpenAI
 
 # ====================================================
 # 🔧 Flask App Setup
 # ====================================================
 app = Flask(__name__)
 CORS(app)
+
+# Initialize OpenAI client
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # ====================================================
 # 📁 Directory Setup
@@ -24,7 +28,7 @@ os.makedirs(INDEX_DIR, exist_ok=True)
 def reindex_knowledge_base():
     """
     Placeholder reindex function used by the crawler and /reindex route.
-    You can replace this later with your FAISS / LangChain vector rebuild logic.
+    You can replace this later with a FAISS / LangChain vector rebuild logic.
     """
     kb_path = os.path.join(DATA_DIR, "knowledge_base.txt")
     os.makedirs(DATA_DIR, exist_ok=True)
@@ -54,12 +58,23 @@ def load_existing_hashes():
     return {}
 
 # ====================================================
-# 🌐 Routes
+# 🧾 Helper: Load Knowledge Base
+# ====================================================
+def load_knowledge_base():
+    kb_path = os.path.join(DATA_DIR, "knowledge_base.txt")
+    if os.path.exists(kb_path):
+        with open(kb_path, "r", encoding="utf-8") as f:
+            return f.read()
+    return "Knowledge base is currently empty."
+
+
+# ====================================================
+# 🌐 ROUTES
 # ====================================================
 
 @app.route("/")
 def home():
-    return "<h2>🔥 Novacool RAG Deployment Active</h2><p>Visit <a href='/uploader'>/uploader</a> to manage uploads & crawling.</p>"
+    return "<h2>🔥 Novacool RAG Deployment Active</h2><p>Visit <a href='/uploader'>/uploader</a> or <a href='/chat'>/chat</a>.</p>"
 
 # ----------------------------
 # 📤 File Upload
@@ -117,7 +132,6 @@ def system_status():
     index_path = os.path.join(INDEX_DIR, "faiss_index")
     kb_path = os.path.join(DATA_DIR, "knowledge_base.txt")
 
-    # calculate index size (MB)
     index_size_mb = 0
     if os.path.exists(index_path):
         for dirpath, _, filenames in os.walk(index_path):
@@ -144,6 +158,55 @@ def system_status():
 @app.route("/uploader")
 def uploader():
     return send_from_directory("templates", "uploader.html")
+
+# ----------------------------
+# 💬 Chat Endpoint (AI-powered)
+# ----------------------------
+@app.route("/chat", methods=["GET", "POST"])
+def chat():
+    if request.method == "GET":
+        return """
+        <h2>🧠 Novacool Chat Interface</h2>
+        <form method='POST'>
+          <input name='user_input' placeholder='Ask about Novacool...' style='width:70%'/>
+          <button>Ask</button>
+        </form>
+        """
+
+    user_input = request.form.get("user_input", "").strip()
+    if not user_input:
+        return "Please enter a message."
+
+    # Load KB context
+    context = load_knowledge_base()
+
+    # Query OpenAI model
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": "You are NovacoolGPT, an assistant knowledgeable about firefighting foam, Novacool UEF, and related safety and technical information."},
+            {"role": "user", "content": f"Context:\n{context}\n\nUser Question:\n{user_input}"}
+        ],
+        temperature=0.4,
+    )
+
+    answer = response.choices[0].message.content.strip()
+
+    return f"""
+    <p><b>You asked:</b> {user_input}</p>
+    <p><b>NovacoolGPT:</b> {answer}</p>
+    <hr><a href='/chat'>Ask another question</a>
+    """
+
+# ----------------------------
+# 💬 Widget Placeholder (future embedded chat)
+# ----------------------------
+@app.route("/widget")
+def widget():
+    return """
+    <h3>Novacool Widget Active</h3>
+    <p>This endpoint will serve the embedded chat widget later.</p>
+    """
 
 # ====================================================
 # 📤 Export symbols for crawler import
