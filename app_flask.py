@@ -3,71 +3,100 @@ from flask_cors import CORS
 import os
 from crawler_controller import CrawlerManager, register_crawler_routes
 
-# --- App setup ---
+# --- Flask setup ---
 app = Flask(__name__)
 CORS(app)
-crawler = CrawlerManager()
-register_crawler_routes(app, crawler)
 
-# --- Paths (Persistent Disk) ---
-DATA_DIR = "/opt/render/project/data"   # Persistent disk mount
+# --- Persistent Data Paths ---
+DATA_DIR = "/opt/render/project/data"
 UPLOAD_FOLDER = os.path.join(DATA_DIR, "uploads")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# --- Startup log verification ---
-try:
-    existing_files = os.listdir(UPLOAD_FOLDER)
-    file_count = len(existing_files)
-    print(f"✅ Using persistent data directory: {DATA_DIR}")
-    print(f"📁 Upload folder verified: {UPLOAD_FOLDER}")
-    if file_count > 0:
-        print(f"📦 Found {file_count} file(s) in uploads: {', '.join(existing_files[:5])}{' ...' if file_count > 5 else ''}")
-    else:
-        print("📭 No files found in uploads yet.")
-except Exception as e:
-    print(f"⚠️ Warning: Could not verify uploads folder — {e}")
+# --- Crawler Setup ---
+crawler = CrawlerManager()
+register_crawler_routes(app, crawler)
 
-# --- Routes ---
-
+# -------------------------------------------------
+# BASE ROUTES
+# -------------------------------------------------
 @app.route("/")
 def home():
     return "<h2>Novacool RAG Deployment Active</h2><p>Visit /uploader, /chat, or /widget</p>"
 
-# --- Upload endpoint ---
-@app.route("/upload", methods=["POST"])
-def upload_file():
-    file = request.files.get("file")
-    if not file:
-        return jsonify({"error": "No file uploaded"}), 400
-    path = os.path.join(UPLOAD_FOLDER, file.filename)
-    file.save(path)
-    print(f"📤 Uploaded: {file.filename} -> {path}")
-
-    # Append to knowledge base placeholder
-    kb_path = os.path.join(DATA_DIR, "knowledge_base.txt")
-    with open(kb_path, "a", encoding="utf-8") as kb:
-        kb.write(f"\nFile uploaded: {file.filename}")
-    print(f"📘 Added {file.filename} to knowledge base log.")
-
-    return jsonify({"message": f"{file.filename} uploaded and added to knowledge base."})
-
-# --- Manual reindex endpoint ---
-@app.route("/reindex", methods=["POST"])
-def reindex_route():
-    msg = reindex_knowledge_base()
-    return jsonify({"message": msg})
-
-def reindex_knowledge_base():
-    return "Reindex complete (stub)."
-
-# --- Serve uploader page ---
 @app.route("/uploader")
-def uploader():
+def uploader_page():
     return send_from_directory("templates", "uploader.html")
 
-# --- Crawler status endpoint ---
-@app.route("/crawler_status")
+# -------------------------------------------------
+# UPLOAD ROUTES
+# -------------------------------------------------
+@app.route("/upload", methods=["POST"])
+def upload_file():
+    """Upload endpoint for PDF, DOCX, or TXT."""
+    if "file" not in request.files:
+        return jsonify({"error": "No file part in request"}), 400
+
+    file = request.files["file"]
+    if file.filename == "":
+        return jsonify({"error": "No selected file"}), 400
+
+    # Save file
+    save_path = os.path.join(UPLOAD_FOLDER, file.filename)
+    file.save(save_path)
+
+    # Add file info to knowledge base
+    kb_path = os.path.join(DATA_DIR, "knowledge_base.txt")
+    with open(kb_path, "a", encoding="utf-8") as kb:
+        kb.write(f"{file.filename}\n")
+
+    return jsonify({"message": f"✅ {file.filename} uploaded and added to knowledge base."}), 200
+
+@app.route("/uploads", methods=["GET"])
+def list_uploads():
+    """List files stored persistently."""
+    files = os.listdir(UPLOAD_FOLDER)
+    return jsonify({"files": files, "count": len(files)})
+
+# -------------------------------------------------
+# REINDEX (STUB)
+# -------------------------------------------------
+@app.route("/reindex", methods=["POST"])
+def reindex_knowledge_base():
+    """Placeholder for reindex operation."""
+    return jsonify({"message": "Reindex complete (stub)."}), 200
+
+# -------------------------------------------------
+# CRAWLER CONTROL ROUTES
+# -------------------------------------------------
+@app.route("/start_crawl", methods=["POST"])
+def start_crawl():
+    """Start a new crawl."""
+    data = request.get_json()
+    base_url = data.get("url")
+    if not base_url:
+        return jsonify({"error": "Missing base URL"}), 400
+
+    try:
+        crawler.start(base_url)
+        return jsonify({"message": f"Crawl started for {base_url}."}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/pause_crawl", methods=["GET"])
+def pause_crawl():
+    """Pause the ongoing crawl."""
+    crawler.pause()
+    return jsonify({"message": "Crawl paused."}), 200
+
+@app.route("/stop_crawl", methods=["GET"])
+def stop_crawl():
+    """Stop the ongoing crawl."""
+    crawler.stop()
+    return jsonify({"message": "Crawl stopped."}), 200
+
+@app.route("/crawler_status", methods=["GET"])
 def crawler_status():
+    """Return JSON with the crawler's current state."""
     return jsonify({
         "active": crawler.active,
         "paused": crawler.paused,
@@ -76,22 +105,19 @@ def crawler_status():
         "status": crawler.status
     })
 
-# --- Persistent disk status check ---
-@app.route("/status")
-def status():
-    """Return JSON summary of data folder and uploads."""
-    try:
-        files = os.listdir(UPLOAD_FOLDER)
-        file_count = len(files)
-        return jsonify({
-            "data_dir": DATA_DIR,
-            "upload_folder": UPLOAD_FOLDER,
-            "file_count": file_count,
-            "files": files[:10],  # Show only first 10 for brevity
-        })
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+# -------------------------------------------------
+# SERVE FILES AND CHAT ENDPOINTS
+# -------------------------------------------------
+@app.route("/chat")
+def chat_page():
+    return send_from_directory("templates", "chat.html")
 
-# --- Main ---
+@app.route("/widget")
+def widget_page():
+    return send_from_directory("templates", "widget.html")
+
+# -------------------------------------------------
+# ENTRY POINT
+# -------------------------------------------------
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
