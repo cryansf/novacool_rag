@@ -2,207 +2,115 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
-  <title>Novacool Assistant Chat</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Novacool Chat Assistant</title>
   <style>
-    * { box-sizing: border-box; }
-
-    html, body {
+    body {
       margin: 0;
-      padding: 0;
-      height: 100%;
-      width: 100%;
       font-family: system-ui, sans-serif;
-      background: #f8f9fb;
+      background: #f4f7fb;
       display: flex;
       justify-content: center;
       align-items: center;
+      height: 100vh;
     }
-
-    .chat-container {
+    .chat-box {
+      width: 400px;
+      height: 500px;
+      background: white;
       display: flex;
       flex-direction: column;
       border-radius: 12px;
-      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.2);
       overflow: hidden;
-      background: #fff;
-      width: 90%;
-      height: 90vh;
-      max-width: 600px;
-      max-height: 800px;
     }
-
     .header {
-      background: #0066cc;
-      color: #fff;
-      padding: 16px;
-      font-size: 1.2em;
+      background: #0052a3;
+      color: white;
+      padding: 12px;
+      font-size: 1.1em;
       text-align: center;
       font-weight: 600;
-      flex-shrink: 0;
     }
-
     .messages {
       flex: 1;
-      padding: 16px;
+      padding: 12px;
       overflow-y: auto;
-      background: #f8f9fb;
-      display: flex;
-      flex-direction: column;
     }
-
-    .message {
-      margin-bottom: 12px;
-      padding: 10px 14px;
+    .msg {
+      margin-bottom: 10px;
+      padding: 10px;
       border-radius: 8px;
-      line-height: 1.4;
       max-width: 80%;
-      word-wrap: break-word;
+      line-height: 1.4;
     }
-
-    .bot {
-      background: #e9eff6;
-      align-self: flex-start;
-      color: #333;
-    }
-
-    .user {
-      background: #0066cc;
-      color: #fff;
-      align-self: flex-end;
-    }
-
+    .bot { background: #e9eff6; align-self: flex-start; }
+    .user { background: #0066cc; color: white; align-self: flex-end; }
     .input-area {
       display: flex;
+      padding: 8px;
       border-top: 1px solid #ddd;
-      padding: 10px;
-      background: #fff;
-      flex-shrink: 0;
     }
-
     input {
       flex: 1;
+      padding: 8px;
       border: 1px solid #ccc;
       border-radius: 6px;
-      padding: 10px;
-      font-size: 1em;
     }
-
     button {
-      margin-left: 10px;
-      padding: 10px 16px;
+      background: #0066cc;
+      color: white;
       border: none;
       border-radius: 6px;
-      background: #0066cc;
-      color: #fff;
+      padding: 8px 12px;
+      margin-left: 6px;
       cursor: pointer;
-      font-size: 1em;
-    }
-    button:hover { background: #0052a3; }
-
-    /* --- Mobile / landscape adjustments --- */
-    @media (max-width: 700px) {
-      .chat-container {
-        width: 100%;
-        height: 100vh;
-        border-radius: 0;
-        max-width: none;
-        max-height: none;
-      }
-    }
-
-    @media (orientation: landscape) and (max-height: 500px) {
-      .chat-container {
-        height: 100vw;
-      }
     }
   </style>
 </head>
 <body>
-  <div class="chat-container">
-    <div class="header">Novacool Assistant</div>
+  <div class="chat-box">
+    <div class="header">Novacool Chat Assistant</div>
     <div class="messages" id="messages"></div>
     <div class="input-area">
       <input id="userInput" type="text" placeholder="Ask me about Novacool..." />
-      <button id="sendBtn">Send</button>
+      <button onclick="send()">Send</button>
     </div>
   </div>
 
   <script>
-    const messagesDiv = document.getElementById('messages');
-    const input = document.getElementById('userInput');
-    const sendBtn = document.getElementById('sendBtn');
-    const STORAGE_KEY = "novacool_chat_history";
+    const msgs = document.getElementById("messages");
+    const input = document.getElementById("userInput");
 
-    // --- Helper: Add message to UI ---
-    function addMessage(text, sender) {
-      const msg = document.createElement('div');
-      msg.classList.add('message', sender);
-      msg.textContent = text;
-      messagesDiv.appendChild(msg);
-      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    function addMsg(text, cls) {
+      const d = document.createElement("div");
+      d.className = "msg " + cls;
+      d.textContent = text;
+      msgs.appendChild(d);
+      msgs.scrollTop = msgs.scrollHeight;
     }
 
-    // --- Helper: Save chat to localStorage ---
-    function saveChat() {
-      const allMessages = Array.from(messagesDiv.children).map(el => ({
-        text: el.textContent,
-        sender: el.classList.contains('user') ? 'user' : 'bot'
-      }));
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(allMessages));
-    }
-
-    // --- Load chat from localStorage on startup ---
-    function loadChat() {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (!stored) return;
-      try {
-        const history = JSON.parse(stored);
-        for (let msg of history) {
-          addMessage(msg.text, msg.sender);
-        }
-      } catch (e) {
-        console.warn("Error parsing chat history:", e);
-      }
-    }
-
-    // --- Send message handler ---
-    async function sendMessage() {
+    async function send() {
       const message = input.value.trim();
       if (!message) return;
-      addMessage(message, 'user');
-      input.value = '';
-      saveChat();
-
+      addMsg(message, "user");
+      input.value = "";
       try {
-        const res = await fetch("https://novacool-rag.onrender.com/api/chat", {
+        const res = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ message })
         });
-
-        if (!res.ok) {
-          const text = await res.text();
-          throw new Error(`HTTP ${res.status}: ${text}`);
-        }
-
         const data = await res.json();
-        const reply = data.reply || data.error || "No response from server.";
-        addMessage(reply, "bot");
-        saveChat();
-      } catch (err) {
-        addMessage("Error: " + err.message, "bot");
-        saveChat();
+        addMsg(data.reply || data.error || "No response", "bot");
+      } catch (e) {
+        addMsg("Error: " + e.message, "bot");
       }
     }
 
-    sendBtn.addEventListener("click", sendMessage);
     input.addEventListener("keypress", e => {
-      if (e.key === "Enter") sendMessage();
+      if (e.key === "Enter") send();
     });
-
-    // --- Load previous chat when opened ---
-    loadChat();
   </script>
 </body>
 </html>
