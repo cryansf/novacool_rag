@@ -2,13 +2,14 @@ services:
   - type: web
     name: novacool_rag
     env: python
-    plan: free
+    plan: starter
     buildCommand: pip install --upgrade pip && pip install -r requirements.txt
     startCommand: gunicorn app_flask:app
     autoDeploy: true
-    build:
-      pythonVersion: 3.12.3
     envVars:
       - key: OPENAI_API_KEY
         sync: false
-
+    disk:
+      name: data
+      mountPath: /opt/render/project/data
+      sizeGB: 2
