@@ -1,19 +1,12 @@
 services:
   - type: web
-    name: novacool-rag
+    name: novacool_rag
     env: python
-    plan: free  # or starter, standard, etc., depending on your Render tier
-    region: oregon  # or your preferred region
+    plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: python sanity_check.py && gunicorn app_flask:app
-    envVars:
-      - key: PYTHON_VERSION
-        value: 3.13.0
-      - key: PORT
-        value: 10000
+    startCommand: gunicorn app_flask:app
+    pythonVersion: 3.12.3
     autoDeploy: true
-    healthCheckPath: /
-    disk:
-      name: data
-      mountPath: /opt/render/project/src/data
-      sizeGB: 1
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
