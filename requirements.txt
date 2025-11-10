@@ -19,6 +19,8 @@ tiktoken==0.7.0
 # --- Data Handling & Utilities ---
 numpy==1.26.4
 pandas==2.2.2
+flask-cors==4.0.0
+
 
 # --- Optional but recommended ---
 python-dotenv==1.0.1     # for local environment management
