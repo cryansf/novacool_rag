@@ -82,6 +82,8 @@
       <h2>📘 Knowledge Base</h2>
       <button onclick="downloadFile('/data/manifest.json')">Download Manifest (JSON)</button>
       <button onclick="downloadFile('/data/knowledge_base.txt')">Download Knowledge Base (TXT)</button>
+      <button onclick="reindexNow()">🔄 Reindex Knowledge Base</button>
+      <div class="status" id="reindexStatus">Reindex status: Waiting...</div>
     </div>
 
     <div class="section">
@@ -100,6 +102,7 @@
   </div>
 
   <script>
+    // --- CRAWLER CONTROLS ---
     async function startCrawl() {
       const url = document.getElementById("crawlUrl").value.trim();
       if (!url) return alert("Please enter a base URL.");
@@ -128,6 +131,7 @@
       document.getElementById("crawlStatus").textContent = data.message || "Stop error";
     }
 
+    // --- FILE UPLOADS ---
     async function uploadFiles() {
       const files = document.getElementById("fileInput").files;
       const statusDiv = document.getElementById("uploadStatus");
@@ -164,7 +168,20 @@
       window.open(path, "_blank");
     }
 
-    // Auto-refresh crawler status
+    // --- REINDEX TRIGGER ---
+    async function reindexNow() {
+      const div = document.getElementById("reindexStatus");
+      div.textContent = "Reindexing knowledge base...";
+      try {
+        const res = await fetch("/reindex", { method: "POST" });
+        const data = await res.json();
+        div.textContent = data.message || data.error || "Reindex complete.";
+      } catch (err) {
+        div.textContent = "Error: " + err.message;
+      }
+    }
+
+    // --- AUTO STATUS POLLING ---
     async function pollStatus() {
       try {
         const res = await fetch("/crawler_status");
