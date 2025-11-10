@@ -5,8 +5,9 @@ services:
     plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn app_flask:app
-    pythonVersion: 3.12.3
     autoDeploy: true
     envVars:
       - key: OPENAI_API_KEY
         sync: false
+    build:
+      pythonVersion: 3.12.3
