@@ -3,239 +3,217 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Uploader Dashboard</title>
+  <title>Novacool RAG Control Dashboard</title>
   <style>
     body {
       font-family: system-ui, sans-serif;
-      background-color: #f8f9fc;
+      background: #f6f9fc;
       color: #222;
-      margin: 0;
+      max-width: 900px;
+      margin: 40px auto;
       padding: 20px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
     }
-    .dashboard {
-      width: 100%;
-      max-width: 650px;
+    h1, h2 {
+      color: #003366;
+    }
+    .section {
       background: #fff;
       border-radius: 12px;
-      padding: 30px;
-      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
-    }
-    h1 {
-      text-align: center;
-      color: #004aad;
-      margin-bottom: 25px;
-    }
-    label {
-      font-weight: 600;
-      display: block;
-      margin-top: 20px;
-      margin-bottom: 6px;
-    }
-    input[type="file"], input[type="text"] {
-      width: 100%;
-      padding: 10px;
-      border: 1px solid #ccc;
-      border-radius: 6px;
-      font-size: 1em;
-      margin-bottom: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.08);
     }
     button {
-      background: #0066cc;
-      color: #fff;
-      border: none;
+      margin: 6px;
+      padding: 8px 14px;
       border-radius: 6px;
-      padding: 10px 20px;
-      font-size: 1em;
+      border: none;
+      background-color: #003366;
+      color: #fff;
+      font-weight: 600;
       cursor: pointer;
-      margin-top: 4px;
+    }
+    button:hover {
+      background-color: #00509e;
+    }
+    #progressBar, #crawlProgressBar {
       width: 100%;
-    }
-    button:hover { background: #0052a3; }
-    .reindex { background: #007bff; margin-top: 15px; }
-    .progress-log {
-      margin-top: 25px;
-      background: #f8f9fb;
-      border-radius: 8px;
-      padding: 10px;
-      height: 150px;
-      overflow-y: auto;
-      font-size: 0.9em;
-      white-space: pre-wrap;
-      border: 1px solid #ddd;
-    }
-    .section { margin-bottom: 20px; }
-    .section h3 {
-      font-size: 1.05em;
-      color: #333;
-      margin-bottom: 10px;
-    }
-    progress {
-      width: 100%;
+      background: #eee;
+      border-radius: 10px;
+      overflow: hidden;
+      margin: 10px 0;
       height: 18px;
-      margin-top: 8px;
     }
-    .control-buttons {
-      display: flex;
-      gap: 10px;
+    #progressFill, #crawlProgressFill {
+      width: 0%;
+      height: 100%;
+      background: #0078d4;
+      transition: width 0.3s;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
       margin-top: 10px;
     }
-    .control-buttons button {
-      flex: 1;
-      font-size: 0.95em;
+    td {
+      padding: 6px;
+      border-bottom: 1px solid #ddd;
+    }
+    input[type=text] {
+      padding: 6px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
     }
   </style>
 </head>
 <body>
-  <div class="dashboard">
-    <h1>Uploader Dashboard</h1>
+  <h1>🔥 Novacool RAG Uploader Dashboard</h1>
 
-    <!-- UPLOAD SECTION -->
-    <div class="section">
-      <label for="fileInput">📁 Upload a File:</label>
-      <input type="file" id="fileInput" multiple />
-      <button id="uploadBtn">Upload</button>
+  <div class="section">
+    <h2>📤 Upload Documents</h2>
+    <form id="uploadForm">
+      <input type="file" id="fileInput" name="files" multiple />
+      <br />
+      <button type="submit">Upload & Index</button>
+    </form>
+    <div id="progressBar"><div id="progressFill"></div></div>
+    <p id="uploadStatus"></p>
+  </div>
+
+  <div class="section">
+    <h2>📊 System Status</h2>
+    <table id="statusTable">
+      <tr><td><b>Indexed Files</b></td><td id="indexedFiles">Loading...</td></tr>
+      <tr><td><b>Upload Directory Files</b></td><td id="uploadFiles">Loading...</td></tr>
+      <tr><td><b>FAISS Index Size</b></td><td id="indexSize">Loading...</td></tr>
+      <tr><td><b>Last Reindex</b></td><td id="lastReindex">Loading...</td></tr>
+      <tr><td><b>Crawler Active</b></td><td id="crawlerStatus">Loading...</td></tr>
+    </table>
+    <button id="refreshBtn">🔄 Refresh</button>
+  </div>
+
+  <div class="section">
+    <h2>🕷 Crawl Control Panel</h2>
+    <label for="crawlUrl"><b>Base URL to crawl:</b></label>
+    <input type="text" id="crawlUrl" placeholder="https://novacool.com" style="width:80%;padding:6px;margin:6px 0;">
+    <div>
+      <button id="btnStartCrawl">Start Crawl</button>
+      <button id="btnPauseCrawl">Pause / Resume</button>
+      <button id="btnStopCrawl">Stop Crawl</button>
     </div>
-
-    <!-- CRAWL SECTION -->
-    <div class="section">
-      <label for="crawlUrl">🌐 Crawl Website (enter base URL):</label>
-      <input type="text" id="crawlUrl" placeholder="https://example.com" />
-      <div class="control-buttons">
-        <button id="crawlBtn">▶️ Start Crawl</button>
-        <button id="pauseBtn" disabled>⏸️ Pause</button>
-        <button id="stopBtn" disabled>⏹️ Stop</button>
+    <div id="crawlProgress" style="margin-top:10px;">
+      <div id="crawlProgressBar">
+        <div id="crawlProgressFill"></div>
       </div>
-      <progress id="crawlProgress" value="0" max="100"></progress>
-      <span id="progressText">0%</span>
-    </div>
-
-    <!-- REINDEX -->
-    <div class="section">
-      <button class="reindex" id="reindexBtn">🔁 Reindex All Files</button>
-    </div>
-
-    <!-- LOG OUTPUT -->
-    <div class="section">
-      <h3>Live Progress Log</h3>
-      <div id="log" class="progress-log"></div>
+      <p id="crawlStatusText">Idle</p>
     </div>
   </div>
 
+  <div class="section">
+    <h2>📥 Knowledge Base</h2>
+    <button id="btnManifest">Download Manifest (JSON)</button>
+    <button id="btnKB">Download Knowledge Base (TXT)</button>
+  </div>
+
   <script>
-    const uploadBtn = document.getElementById('uploadBtn');
-    const fileInput = document.getElementById('fileInput');
-    const log = document.getElementById('log');
-    const crawlBtn = document.getElementById('crawlBtn');
-    const crawlUrl = document.getElementById('crawlUrl');
-    const reindexBtn = document.getElementById('reindexBtn');
-    const pauseBtn = document.getElementById('pauseBtn');
-    const stopBtn = document.getElementById('stopBtn');
-    const crawlProgress = document.getElementById('crawlProgress');
-    const progressText = document.getElementById('progressText');
+    // ------------------------
+    // Upload logic
+    // ------------------------
+    const uploadForm = document.getElementById("uploadForm");
+    const fileInput = document.getElementById("fileInput");
+    const uploadStatus = document.getElementById("uploadStatus");
+    const progressFill = document.getElementById("progressFill");
 
-    let crawlActive = false;
-    let crawlTimer;
+    uploadForm.onsubmit = async (e) => {
+      e.preventDefault();
+      const files = fileInput.files;
+      if (!files.length) return alert("Select at least one file.");
+      const formData = new FormData();
+      for (let f of files) formData.append("files", f);
+      uploadStatus.innerText = "Uploading...";
+      progressFill.style.width = "0%";
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", "/upload");
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+          const percent = (event.loaded / event.total) * 100;
+          progressFill.style.width = percent + "%";
+        }
+      };
+      xhr.onload = () => {
+        uploadStatus.innerText = xhr.status === 200
+          ? "✅ " + JSON.parse(xhr.responseText).status
+          : "❌ Upload failed.";
+        loadSystemStatus();
+      };
+      xhr.onerror = () => uploadStatus.innerText = "⚠️ Network error.";
+      xhr.send(formData);
+    };
 
-    function appendLog(message) {
-      log.textContent += message + "\n";
-      log.scrollTop = log.scrollHeight;
+    // ------------------------
+    // System status logic
+    // ------------------------
+    async function loadSystemStatus() {
+      try {
+        const res = await fetch("/system_status");
+        const data = await res.json();
+        document.getElementById("indexedFiles").innerText = data.indexed_files;
+        document.getElementById("uploadFiles").innerText = data.upload_dir_files;
+        document.getElementById("indexSize").innerText = data.index_size_mb + " MB";
+        document.getElementById("lastReindex").innerText = data.last_reindex;
+        document.getElementById("crawlerStatus").innerText = data.crawler_active ? "🟢 Active" : "⚪ Idle";
+      } catch (err) {
+        console.error("Status load error:", err);
+      }
     }
 
-    // --- Upload handler ---
-    uploadBtn.addEventListener('click', async () => {
-      const files = fileInput.files;
-      if (!files.length) return alert("Please select at least one file.");
-      const formData = new FormData();
-      for (let file of files) formData.append("files", file);
-      appendLog("Uploading " + files.length + " file(s)...");
+    document.getElementById("refreshBtn").onclick = loadSystemStatus;
+    document.getElementById("btnManifest").onclick = () => window.open("/download_manifest", "_blank");
+    document.getElementById("btnKB").onclick = () => window.open("/download_kb", "_blank");
+    loadSystemStatus();
+    setInterval(loadSystemStatus, 30000);
 
-      try {
-        const res = await fetch("/upload", { method: "POST", body: formData });
-        const text = await res.text();
-        try {
-          const data = JSON.parse(text);
-          appendLog("✅ " + data.status);
-        } catch { appendLog("⚠️ Error fetching status: " + text); }
-      } catch (err) {
-        appendLog("❌ Upload failed: " + err.message);
-      }
-    });
-
-    // --- Crawl controls ---
-    crawlBtn.addEventListener('click', async () => {
-      const url = crawlUrl.value.trim();
-      if (!url) return alert("Please enter a URL to crawl.");
-      appendLog("Starting crawl for: " + url);
-      crawlBtn.disabled = true;
-      pauseBtn.disabled = false;
-      stopBtn.disabled = false;
-      crawlActive = true;
-      try {
-        await fetch("/crawl", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url })
-        });
-        monitorProgress();
-      } catch (err) {
-        appendLog("❌ Crawl start failed: " + err.message);
-      }
-    });
-
-    pauseBtn.addEventListener('click', async () => {
-      await fetch("/pause_crawl", { method: "POST" });
-      appendLog("⏸️ Crawl paused");
-    });
-
-    stopBtn.addEventListener('click', async () => {
-      await fetch("/stop_crawl", { method: "POST" });
-      appendLog("⏹️ Crawl stopped");
-      crawlActive = false;
-      clearTimeout(crawlTimer);
-      crawlBtn.disabled = false;
-      pauseBtn.disabled = true;
-      stopBtn.disabled = true;
-    });
-
-    async function monitorProgress() {
-      if (!crawlActive) return;
+    // ------------------------
+    // Crawl Control Logic
+    // ------------------------
+    async function updateCrawlStatus() {
       try {
         const res = await fetch("/crawl_status");
         const data = await res.json();
-        crawlProgress.value = data.percent || 0;
-        progressText.textContent = `${data.percent || 0}%`;
-        if (data.message) appendLog(data.message);
-        if (!data.complete && !data.stopped) {
-          crawlTimer = setTimeout(monitorProgress, 2000);
-        } else {
-          appendLog("✅ Crawl completed");
-          crawlActive = false;
-          crawlBtn.disabled = false;
-          pauseBtn.disabled = true;
-          stopBtn.disabled = true;
-        }
+        document.getElementById("crawlProgressFill").style.width = (data.percent || 0) + "%";
+        document.getElementById("crawlStatusText").innerText = data.message || "Idle";
       } catch (err) {
-        appendLog("⚠️ Status error: " + err.message);
+        console.error("Crawl status error:", err);
       }
     }
 
-    // --- Reindex handler ---
-    reindexBtn.addEventListener('click', async () => {
-      appendLog("🔁 Reindexing all stored documents...");
-      try {
-        const res = await fetch("/reindex", { method: "POST" });
-        const text = await res.text();
-        try {
-          const data = JSON.parse(text);
-          appendLog("✅ " + data.status);
-        } catch { appendLog("⚠️ Error fetching status: " + text); }
-      } catch (err) {
-        appendLog("❌ Reindex failed: " + err.message);
-      }
-    });
+    document.getElementById("btnStartCrawl").onclick = async () => {
+      const url = document.getElementById("crawlUrl").value.trim();
+      if (!url) return alert("Enter a base URL to crawl (e.g. https://novacool.com)");
+      const res = await fetch("/crawl", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url })
+      });
+      const data = await res.json();
+      document.getElementById("crawlStatusText").innerText = data.status;
+      updateCrawlStatus();
+    };
+
+    document.getElementById("btnPauseCrawl").onclick = async () => {
+      const res = await fetch("/pause_crawl", { method: "POST" });
+      const data = await res.json();
+      document.getElementById("crawlStatusText").innerText = data.status;
+    };
+
+    document.getElementById("btnStopCrawl").onclick = async () => {
+      const res = await fetch("/stop_crawl", { method: "POST" });
+      const data = await res.json();
+      document.getElementById("crawlStatusText").innerText = data.status;
+    };
+
+    setInterval(updateCrawlStatus, 5000);
+    updateCrawlStatus();
   </script>
 </body>
 </html>
