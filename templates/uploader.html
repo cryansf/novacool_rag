@@ -3,217 +3,249 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Novacool RAG Control Dashboard</title>
+  <title>Novacool RAG Uploader</title>
   <style>
     body {
-      font-family: system-ui, sans-serif;
-      background: #f6f9fc;
-      color: #222;
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #f5f7fa;
+      margin: 0;
+      padding: 0;
+      color: #111;
+    }
+
+    header {
+      background: #0a284b;
+      color: white;
+      text-align: center;
+      padding: 1rem 0.5rem;
+    }
+
+    main {
       max-width: 900px;
-      margin: 40px auto;
-      padding: 20px;
+      margin: auto;
+      padding: 1.5rem;
     }
-    h1, h2 {
-      color: #003366;
-    }
-    .section {
-      background: #fff;
+
+    section {
+      background: white;
       border-radius: 12px;
-      padding: 20px;
-      margin-bottom: 20px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+      box-shadow: 0 3px 8px rgba(0,0,0,0.08);
+      margin-bottom: 1.5rem;
+      padding: 1.2rem;
     }
+
+    h2 {
+      margin-top: 0;
+      color: #0a284b;
+    }
+
     button {
-      margin: 6px;
-      padding: 8px 14px;
-      border-radius: 6px;
+      background: #0a284b;
+      color: white;
       border: none;
-      background-color: #003366;
-      color: #fff;
-      font-weight: 600;
+      border-radius: 6px;
+      padding: 0.6rem 1rem;
       cursor: pointer;
+      font-weight: 600;
+      transition: background 0.25s;
     }
+
     button:hover {
-      background-color: #00509e;
+      background: #103d73;
     }
-    #progressBar, #crawlProgressBar {
+
+    input[type="file"], input[type="text"] {
       width: 100%;
-      background: #eee;
-      border-radius: 10px;
-      overflow: hidden;
-      margin: 10px 0;
-      height: 18px;
-    }
-    #progressFill, #crawlProgressFill {
-      width: 0%;
-      height: 100%;
-      background: #0078d4;
-      transition: width 0.3s;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 10px;
-    }
-    td {
-      padding: 6px;
-      border-bottom: 1px solid #ddd;
-    }
-    input[type=text] {
-      padding: 6px;
+      padding: 0.6rem;
       border-radius: 6px;
       border: 1px solid #ccc;
+      margin-bottom: 1rem;
+    }
+
+    #output {
+      background: #f0f3f8;
+      border-radius: 8px;
+      padding: 1rem;
+      font-size: 0.9rem;
+      white-space: pre-wrap;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    /* Chat Section */
+    #chat-container {
+      display: flex;
+      flex-direction: column;
+    }
+
+    #chat-log {
+      background: #f7f9fc;
+      border: 1px solid #dce2e9;
+      border-radius: 8px;
+      padding: 0.8rem;
+      height: 260px;
+      overflow-y: auto;
+      margin-bottom: 0.6rem;
+      font-size: 0.95rem;
+    }
+
+    #chat-input {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    #chat-input input {
+      flex: 1;
+      padding: 0.6rem;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+    }
+
+    #chat-input button {
+      flex-shrink: 0;
+    }
+
+    .user {
+      font-weight: bold;
+      color: #0a284b;
+    }
+
+    .bot {
+      color: #0a284b;
+    }
+
+    footer {
+      text-align: center;
+      color: #666;
+      padding: 1rem;
+      font-size: 0.85rem;
+    }
+
+    /* Responsive tweaks */
+    @media (max-width: 600px) {
+      main {
+        padding: 0.8rem;
+        max-width: 95%;
+      }
+      #chat-log {
+        height: 200px;
+      }
     }
   </style>
 </head>
 <body>
-  <h1>🔥 Novacool RAG Uploader Dashboard</h1>
+  <header>
+    <h1>🔥 Novacool RAG Control Center</h1>
+    <p>Manage uploads, crawls, and chat with NovacoolGPT</p>
+  </header>
 
-  <div class="section">
-    <h2>📤 Upload Documents</h2>
-    <form id="uploadForm">
-      <input type="file" id="fileInput" name="files" multiple />
-      <br />
-      <button type="submit">Upload & Index</button>
-    </form>
-    <div id="progressBar"><div id="progressFill"></div></div>
-    <p id="uploadStatus"></p>
-  </div>
+  <main>
+    <!-- Upload Section -->
+    <section>
+      <h2>📤 File Upload</h2>
+      <input type="file" id="fileInput" multiple />
+      <button onclick="uploadFiles()">Upload Files</button>
+      <div id="output"></div>
+    </section>
 
-  <div class="section">
-    <h2>📊 System Status</h2>
-    <table id="statusTable">
-      <tr><td><b>Indexed Files</b></td><td id="indexedFiles">Loading...</td></tr>
-      <tr><td><b>Upload Directory Files</b></td><td id="uploadFiles">Loading...</td></tr>
-      <tr><td><b>FAISS Index Size</b></td><td id="indexSize">Loading...</td></tr>
-      <tr><td><b>Last Reindex</b></td><td id="lastReindex">Loading...</td></tr>
-      <tr><td><b>Crawler Active</b></td><td id="crawlerStatus">Loading...</td></tr>
-    </table>
-    <button id="refreshBtn">🔄 Refresh</button>
-  </div>
-
-  <div class="section">
-    <h2>🕷 Crawl Control Panel</h2>
-    <label for="crawlUrl"><b>Base URL to crawl:</b></label>
-    <input type="text" id="crawlUrl" placeholder="https://novacool.com" style="width:80%;padding:6px;margin:6px 0;">
-    <div>
-      <button id="btnStartCrawl">Start Crawl</button>
-      <button id="btnPauseCrawl">Pause / Resume</button>
-      <button id="btnStopCrawl">Stop Crawl</button>
-    </div>
-    <div id="crawlProgress" style="margin-top:10px;">
-      <div id="crawlProgressBar">
-        <div id="crawlProgressFill"></div>
+    <!-- Crawl Control -->
+    <section>
+      <h2>🕷 Crawl Control Panel</h2>
+      <input type="text" id="baseURL" placeholder="https://novacool.com" value="https://novacool.com" />
+      <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+        <button onclick="startCrawl()">Start Crawl</button>
+        <button onclick="pauseCrawl()">Pause / Resume</button>
+        <button onclick="stopCrawl()">Stop Crawl</button>
       </div>
-      <p id="crawlStatusText">Idle</p>
-    </div>
-  </div>
+      <div id="crawlStatus" style="margin-top:0.8rem; font-size:0.9rem;"></div>
+    </section>
 
-  <div class="section">
-    <h2>📥 Knowledge Base</h2>
-    <button id="btnManifest">Download Manifest (JSON)</button>
-    <button id="btnKB">Download Knowledge Base (TXT)</button>
-  </div>
+    <!-- Chat Section -->
+    <section>
+      <h2>💬 Chat with NovacoolGPT</h2>
+      <div id="chat-container">
+        <div id="chat-log"></div>
+        <div id="chat-input">
+          <input type="text" id="chat-text" placeholder="Ask about Novacool, firefighting foam, or UEF..." />
+          <button onclick="sendChat()">Send</button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer>
+    © 2025 Novacool UEF | Smart AI-Enhanced RAG System
+  </footer>
 
   <script>
-    // ------------------------
-    // Upload logic
-    // ------------------------
-    const uploadForm = document.getElementById("uploadForm");
-    const fileInput = document.getElementById("fileInput");
-    const uploadStatus = document.getElementById("uploadStatus");
-    const progressFill = document.getElementById("progressFill");
+    // ----------------------------
+    // Upload Function
+    // ----------------------------
+    async function uploadFiles() {
+      const files = document.getElementById("fileInput").files;
+      if (!files.length) return alert("Please select at least one file.");
 
-    uploadForm.onsubmit = async (e) => {
-      e.preventDefault();
-      const files = fileInput.files;
-      if (!files.length) return alert("Select at least one file.");
       const formData = new FormData();
       for (let f of files) formData.append("files", f);
-      uploadStatus.innerText = "Uploading...";
-      progressFill.style.width = "0%";
-      const xhr = new XMLHttpRequest();
-      xhr.open("POST", "/upload");
-      xhr.upload.onprogress = (event) => {
-        if (event.lengthComputable) {
-          const percent = (event.loaded / event.total) * 100;
-          progressFill.style.width = percent + "%";
-        }
-      };
-      xhr.onload = () => {
-        uploadStatus.innerText = xhr.status === 200
-          ? "✅ " + JSON.parse(xhr.responseText).status
-          : "❌ Upload failed.";
-        loadSystemStatus();
-      };
-      xhr.onerror = () => uploadStatus.innerText = "⚠️ Network error.";
-      xhr.send(formData);
-    };
 
-    // ------------------------
-    // System status logic
-    // ------------------------
-    async function loadSystemStatus() {
+      document.getElementById("output").innerText = "⏳ Uploading " + files.length + " file(s)...";
+
       try {
-        const res = await fetch("/system_status");
+        const res = await fetch("/upload", { method: "POST", body: formData });
         const data = await res.json();
-        document.getElementById("indexedFiles").innerText = data.indexed_files;
-        document.getElementById("uploadFiles").innerText = data.upload_dir_files;
-        document.getElementById("indexSize").innerText = data.index_size_mb + " MB";
-        document.getElementById("lastReindex").innerText = data.last_reindex;
-        document.getElementById("crawlerStatus").innerText = data.crawler_active ? "🟢 Active" : "⚪ Idle";
+        document.getElementById("output").innerText = "✅ " + data.status;
       } catch (err) {
-        console.error("Status load error:", err);
+        document.getElementById("output").innerText = "❌ Error: " + err.message;
       }
     }
 
-    document.getElementById("refreshBtn").onclick = loadSystemStatus;
-    document.getElementById("btnManifest").onclick = () => window.open("/download_manifest", "_blank");
-    document.getElementById("btnKB").onclick = () => window.open("/download_kb", "_blank");
-    loadSystemStatus();
-    setInterval(loadSystemStatus, 30000);
-
-    // ------------------------
-    // Crawl Control Logic
-    // ------------------------
-    async function updateCrawlStatus() {
-      try {
-        const res = await fetch("/crawl_status");
-        const data = await res.json();
-        document.getElementById("crawlProgressFill").style.width = (data.percent || 0) + "%";
-        document.getElementById("crawlStatusText").innerText = data.message || "Idle";
-      } catch (err) {
-        console.error("Crawl status error:", err);
-      }
+    // ----------------------------
+    // Crawler Functions
+    // ----------------------------
+    async function startCrawl() {
+      const url = document.getElementById("baseURL").value;
+      const res = await fetch("/crawler/start?url=" + encodeURIComponent(url));
+      document.getElementById("crawlStatus").innerText = "Started crawling " + url + "...";
     }
 
-    document.getElementById("btnStartCrawl").onclick = async () => {
-      const url = document.getElementById("crawlUrl").value.trim();
-      if (!url) return alert("Enter a base URL to crawl (e.g. https://novacool.com)");
-      const res = await fetch("/crawl", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url })
-      });
-      const data = await res.json();
-      document.getElementById("crawlStatusText").innerText = data.status;
-      updateCrawlStatus();
-    };
+    async function pauseCrawl() {
+      await fetch("/crawler/pause");
+      document.getElementById("crawlStatus").innerText = "Crawler paused/resumed.";
+    }
 
-    document.getElementById("btnPauseCrawl").onclick = async () => {
-      const res = await fetch("/pause_crawl", { method: "POST" });
-      const data = await res.json();
-      document.getElementById("crawlStatusText").innerText = data.status;
-    };
+    async function stopCrawl() {
+      await fetch("/crawler/stop");
+      document.getElementById("crawlStatus").innerText = "Crawler stopped.";
+    }
 
-    document.getElementById("btnStopCrawl").onclick = async () => {
-      const res = await fetch("/stop_crawl", { method: "POST" });
-      const data = await res.json();
-      document.getElementById("crawlStatusText").innerText = data.status;
-    };
+    // ----------------------------
+    // Chat Function
+    // ----------------------------
+    async function sendChat() {
+      const chatBox = document.getElementById("chat-text");
+      const chatLog = document.getElementById("chat-log");
+      const message = chatBox.value.trim();
+      if (!message) return;
 
-    setInterval(updateCrawlStatus, 5000);
-    updateCrawlStatus();
+      chatLog.innerHTML += `<p><span class="user">You:</span> ${message}</p>`;
+      chatBox.value = "";
+
+      try {
+        const formData = new FormData();
+        formData.append("user_input", message);
+
+        const res = await fetch("/chat", { method: "POST", body: formData });
+        const text = await res.text();
+
+        // Extract only the assistant’s part
+        const clean = text.replace(/<[^>]*>?/gm, "");
+        chatLog.innerHTML += `<p><span class="bot">NovacoolGPT:</span> ${clean}</p>`;
+        chatLog.scrollTop = chatLog.scrollHeight;
+      } catch (err) {
+        chatLog.innerHTML += `<p style="color:red;">Error: ${err.message}</p>`;
+      }
+    }
   </script>
 </body>
 </html>
