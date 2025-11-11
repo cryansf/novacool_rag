@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Novacool RAG File Uploader</title>
+  <title>Novacool RAG Console</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
   <style>
     body {
@@ -11,97 +11,83 @@
       font-family: system-ui, sans-serif;
       padding: 2rem;
     }
-    h1, h3 {
-      color: #0d6efd;
-      font-weight: 700;
-    }
-    .card {
-      border-radius: 1rem;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-      margin-bottom: 1.5rem;
-    }
-    #chat-bubble {
-      position: fixed;
-      bottom: 25px;
-      right: 25px;
-      background-color: #0d6efd;
-      color: white;
-      width: 55px;
-      height: 55px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 26px;
-      cursor: pointer;
-      box-shadow: 0 3px 10px rgba(0,0,0,0.3);
-      z-index: 1000;
-      transition: transform 0.2s;
-    }
-    #chat-bubble:hover { transform: scale(1.1); }
+    h1 { color: #0d6efd; font-weight: 700; margin-bottom: 2rem; }
+    .section-title { font-weight: 600; color: #0d6efd; }
 
-    #chat-window {
-      display: none;
-      position: fixed;
-      bottom: 90px;
-      right: 25px;
-      width: 340px;
+    .console-card {
       background: white;
       border-radius: 1rem;
-      box-shadow: 0 8px 20px rgba(0,0,0,0.3);
-      overflow: hidden;
-      z-index: 1000;
-    }
-    #chat-header {
-      background-color: #0d6efd;
-      color: white;
-      text-align: center;
-      padding: 0.75rem;
-      font-weight: 600;
-    }
-    #chat-body {
-      height: 280px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      padding: 1.2rem;
+      height: 500px;
       overflow-y: auto;
-      padding: 1rem;
-      font-size: 0.95rem;
     }
-    #chat-input-area {
-      display: flex;
-      border-top: 1px solid #ddd;
+
+    #chat-bubble {
+      position: fixed; bottom: 25px; right: 25px;
+      background: #0d6efd; color: #fff; width: 55px; height: 55px;
+      border-radius: 50%; display: flex; align-items: center;
+      justify-content: center; font-size: 26px; cursor: pointer;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.3); z-index: 1000;
     }
-    #chat-input {
-      flex: 1;
-      padding: 0.5rem;
-      border: none;
-      outline: none;
+    #chat-window {
+      display: none; position: fixed; bottom: 90px; right: 25px;
+      width: 340px; background: white; border-radius: 1rem;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.3); overflow: hidden; z-index: 1000;
     }
-    #chat-send {
-      background: #0d6efd;
-      color: white;
-      border: none;
-      padding: 0 1rem;
-      cursor: pointer;
-    }
+    #chat-header { background: #0d6efd; color: white; text-align: center; padding: 0.75rem; font-weight: 600; }
+    #chat-body { height: 280px; overflow-y: auto; padding: 1rem; font-size: 0.95rem; }
+    #chat-input-area { display: flex; border-top: 1px solid #ddd; }
+    #chat-input { flex: 1; padding: 0.5rem; border: none; outline: none; }
+    #chat-send { background: #0d6efd; color: white; border: none; padding: 0 1rem; cursor: pointer; }
+    pre { font-size: 0.9rem; background: #111; color: #0f0; padding: 0.75rem; border-radius: 0.5rem; }
   </style>
 </head>
 <body>
-  <div class="container text-center">
-    <h1>📁 Novacool RAG File Uploader</h1>
-    <div class="card p-3">
-      <input type="file" id="fileInput" class="form-control mb-3" multiple />
-      <button id="uploadBtn" class="btn btn-primary w-100">Upload Files</button>
+  <h1 class="text-center">🧠 Novacool RAG Control Console</h1>
+
+  <div class="row g-4">
+    <!-- File Upload -->
+    <div class="col-md-4">
+      <h5 class="section-title">📁 Upload Files</h5>
+      <div class="console-card">
+        <input type="file" id="fileInput" class="form-control mb-3" multiple />
+        <button id="uploadBtn" class="btn btn-primary w-100 mb-3">Upload Files</button>
+        <h6 class="text-primary mt-3">Persistent Files:</h6>
+        <ul id="fileList" class="text-start list-unstyled small"></ul>
+      </div>
     </div>
 
-    <div class="card p-3">
-      <h3>📂 Persistent Files in /data/uploads</h3>
-      <ul id="fileList" class="text-start list-unstyled"></ul>
+    <!-- Crawler -->
+    <div class="col-md-4">
+      <h5 class="section-title">🕷️ Crawler Console</h5>
+      <div class="console-card">
+        <input type="text" id="crawlUrl" class="form-control mb-3" placeholder="https://novacool.com" />
+        <div class="d-flex gap-2 mb-3">
+          <button id="crawlStart" class="btn btn-success flex-fill">Start</button>
+          <button id="crawlPause" class="btn btn-warning flex-fill">Pause</button>
+          <button id="crawlStop" class="btn btn-danger flex-fill">Stop</button>
+        </div>
+        <button id="crawlClear" class="btn btn-secondary w-100 mb-3">Clear Logs</button>
+        <h6 class="text-primary">Logs:</h6>
+        <pre id="crawlLogs" class="small"></pre>
+      </div>
+    </div>
+
+    <!-- Chat -->
+    <div class="col-md-4">
+      <h5 class="section-title">💬 Chat / Query Engine</h5>
+      <div class="console-card">
+        <input type="text" id="chatQuery" class="form-control mb-3" placeholder="Ask something..." />
+        <button id="chatSendBtn" class="btn btn-info w-100 mb-3">Send Query</button>
+        <pre id="chatOutput" class="small"></pre>
+      </div>
     </div>
   </div>
 
   <!-- Floating Chat Bubble -->
   <div id="chat-bubble">💬</div>
 
-  <!-- Chat Window -->
   <div id="chat-window">
     <div id="chat-header">Novacool Assistant</div>
     <div id="chat-body"></div>
@@ -112,7 +98,7 @@
   </div>
 
   <script>
-    // ========== Uploader Logic ==========
+    // ------------------ File Uploader ------------------
     async function refreshFileList() {
       const res = await fetch('/check_uploads');
       const data = await res.json();
@@ -143,7 +129,47 @@
 
     refreshFileList();
 
-    // ========== Chat Bubble Logic ==========
+    // ------------------ Crawler ------------------
+    const crawlLogs = document.getElementById('crawlLogs');
+    async function updateLogs() {
+      const res = await fetch('/crawl/logs');
+      const data = await res.json();
+      crawlLogs.textContent = data.logs || '';
+    }
+
+    document.getElementById('crawlStart').addEventListener('click', async () => {
+      const url = document.getElementById('crawlUrl').value.trim();
+      await fetch('/crawl', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
+      updateLogs();
+    });
+
+    document.getElementById('crawlPause').addEventListener('click', async () => {
+      await fetch('/crawl/pause', { method: 'POST' });
+      updateLogs();
+    });
+
+    document.getElementById('crawlStop').addEventListener('click', async () => {
+      await fetch('/crawl/stop', { method: 'POST' });
+      updateLogs();
+    });
+
+    document.getElementById('crawlClear').addEventListener('click', async () => {
+      await fetch('/crawl/clear', { method: 'POST' });
+      updateLogs();
+    });
+
+    setInterval(updateLogs, 3000);
+
+    // ------------------ Chat Engine ------------------
+    document.getElementById('chatSendBtn').addEventListener('click', async () => {
+      const query = document.getElementById('chatQuery').value.trim();
+      if (!query) return alert('Enter a query');
+      const res = await fetch('/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query }) });
+      const data = await res.json();
+      document.getElementById('chatOutput').textContent = data.message || JSON.stringify(data);
+    });
+
+    // ------------------ Floating Chat Bubble ------------------
     const bubble = document.getElementById('chat-bubble');
     const chatWindow = document.getElementById('chat-window');
     const chatBody = document.getElementById('chat-body');
@@ -152,6 +178,8 @@
 
     bubble.addEventListener('click', () => {
       chatWindow.style.display = chatWindow.style.display === 'none' ? 'block' : 'none';
+      if (chatWindow.style.display === 'block' && chatBody.innerHTML.trim() === '')
+        appendMessage('Assistant', 'Hi Casey — Novacool RAG Assistant is ready!');
     });
 
     sendBtn.addEventListener('click', sendMessage);
@@ -162,14 +190,17 @@
       if (!msg) return;
       appendMessage('You', msg);
       chatInput.value = '';
-
-      const res = await fetch('/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: msg })
-      });
-      const data = await res.json();
-      appendMessage('Assistant', data.message || JSON.stringify(data));
+      try {
+        const res = await fetch('/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: msg })
+        });
+        const data = await res.json();
+        appendMessage('Assistant', data.message || JSON.stringify(data));
+      } catch {
+        appendMessage('Assistant', '⚠️ Connection error.');
+      }
     }
 
     function appendMessage(sender, text) {

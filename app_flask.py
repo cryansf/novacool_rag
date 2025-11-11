@@ -1,44 +1,40 @@
 from flask import Flask, render_template, request, jsonify, send_from_directory
 from flask_cors import CORS
 import os
+import time
 
-# Import modules
-from crawler_controller import crawl_and_ingest
-from rag_pipeline import ingest_text, search_docs
-
-# -----------------------------------------------------------------------------
-# Flask App Setup
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Flask Setup
+# ---------------------------------------------------------------------------
 app = Flask(__name__)
 CORS(app)
 
-# Persistent folder (Render’s /data is preserved across deploys)
 UPLOAD_FOLDER = "/data/uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# -----------------------------------------------------------------------------
-# Root - Uploader Page
-# -----------------------------------------------------------------------------
+CRAWL_LOG_PATH = "/data/crawler.log"
+
+
+# ---------------------------------------------------------------------------
+# Routes
+# ---------------------------------------------------------------------------
 @app.route("/", methods=["GET"])
 def uploader_page():
-    """Serve the Bootstrap uploader interface."""
+    """Serve the main interface with uploader, crawler, and chat."""
     return render_template("uploader.html")
 
-# -----------------------------------------------------------------------------
-# Health Check
-# -----------------------------------------------------------------------------
+
 @app.route("/health", methods=["GET"])
-def health_check():
+def health():
     return jsonify({"status": "ok"})
 
-# -----------------------------------------------------------------------------
-# Upload File
-# -----------------------------------------------------------------------------
+
+# -------------------------- File Uploading --------------------------
 @app.route("/upload", methods=["POST"])
 def upload_file():
-    """Upload and persist files into /data/uploads directory."""
+    """Handle file uploads."""
     if "file" not in request.files:
-        return jsonify({"error": "No file part"}), 400
+        return jsonify({"error": "No file provided"}), 400
 
     file = request.files["file"]
     if file.filename == "":
@@ -47,73 +43,82 @@ def upload_file():
     try:
         save_path = os.path.join(UPLOAD_FOLDER, file.filename)
         file.save(save_path)
-        return jsonify({
-            "message": f"File '{file.filename}' saved successfully.",
-            "path": f"/uploads/{file.filename}"
-        }), 200
+        return jsonify({"message": f"File '{file.filename}' uploaded successfully."})
     except Exception as e:
-        return jsonify({"error": f"Failed to save file: {e}"}), 500
+        return jsonify({"error": str(e)}), 500
 
-# -----------------------------------------------------------------------------
-# Serve Uploaded Files
-# -----------------------------------------------------------------------------
+
 @app.route("/uploads/<path:filename>", methods=["GET"])
 def get_uploaded_file(filename):
-    """Allow access to previously uploaded files."""
+    """Serve uploaded files."""
     return send_from_directory(UPLOAD_FOLDER, filename)
 
-# -----------------------------------------------------------------------------
-# List All Uploaded Files
-# -----------------------------------------------------------------------------
+
 @app.route("/check_uploads", methods=["GET"])
 def check_uploads():
-    """List all files currently stored in /data/uploads."""
+    """List uploaded files."""
     try:
-        files = os.listdir(UPLOAD_FOLDER)
+        files = sorted(os.listdir(UPLOAD_FOLDER))
         file_urls = [f"/uploads/{name}" for name in files]
         return jsonify({"files": file_urls})
     except Exception as e:
-        return jsonify({"error": f"Unable to list uploads: {e}"}), 500
+        return jsonify({"error": str(e)}), 500
 
-# -----------------------------------------------------------------------------
-# Crawl and Ingest Endpoint
-# -----------------------------------------------------------------------------
+
+# -------------------------- Simulated Crawler --------------------------
 @app.route("/crawl", methods=["POST"])
-def crawl_route():
-    """Crawl a webpage and ingest its text into the RAG pipeline."""
-    data = request.get_json()
-    url = data.get("url") if data else None
+def start_crawl():
+    """Simulated crawler start."""
+    data = request.get_json(force=True)
+    url = data.get("url", "")
+    with open(CRAWL_LOG_PATH, "a") as f:
+        f.write(f"[{time.ctime()}] 🕷️ Crawl started for: {url}\n")
+    return jsonify({"message": f"Crawl started for {url}"})
 
-    if not url:
-        return jsonify({"error": "Missing 'url' in request body"}), 400
 
-    result = crawl_and_ingest(url)
-    return jsonify({"message": result})
+@app.route("/crawl/pause", methods=["POST"])
+def pause_crawl():
+    with open(CRAWL_LOG_PATH, "a") as f:
+        f.write(f"[{time.ctime()}] ⏸️ Crawl paused\n")
+    return jsonify({"message": "Crawler paused"})
 
-# -----------------------------------------------------------------------------
-# Chat / Query Endpoint (with placeholder reply)
-# -----------------------------------------------------------------------------
+
+@app.route("/crawl/stop", methods=["POST"])
+def stop_crawl():
+    with open(CRAWL_LOG_PATH, "a") as f:
+        f.write(f"[{time.ctime()}] 🛑 Crawl stopped\n")
+    return jsonify({"message": "Crawler stopped"})
+
+
+@app.route("/crawl/clear", methods=["POST"])
+def clear_logs():
+    open(CRAWL_LOG_PATH, "w").close()
+    return jsonify({"message": "Logs cleared"})
+
+
+@app.route("/crawl/logs", methods=["GET"])
+def get_logs():
+    if not os.path.exists(CRAWL_LOG_PATH):
+        return jsonify({"logs": ""})
+    with open(CRAWL_LOG_PATH, "r") as f:
+        logs = f.read()
+    return jsonify({"logs": logs})
+
+
+# -------------------------- Chat Endpoint --------------------------
 @app.route("/chat", methods=["POST"])
 def chat():
-    """
-    Accept JSON: {"query": "<user question>"}
-    Returns a simulated response now, real RAG search later.
-    """
-    data = request.get_json()
+    data = request.get_json(force=True)
     query = data.get("query", "").strip()
-
     if not query:
         return jsonify({"error": "Query cannot be empty"}), 400
+    # Simulated chat response
+    return jsonify({"message": f"Hi Casey — I received: '{query}'. Live RAG integration coming soon!"})
 
-    # Placeholder reply to confirm chat works
-    return jsonify({
-        "query": query,
-        "message": f"🤖 Thanks for your question: '{query}'. I'm connected to the Novacool RAG backend and ready for full AI responses soon!"
-    }), 200
 
-# -----------------------------------------------------------------------------
-# Main Entry
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port, debug=True)
