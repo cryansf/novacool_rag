@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request, jsonify, send_from_directory
 from flask_cors import CORS
 import os
-from crawler_controller import CrawlerManager, register_crawler_routes
+from crawler_controller import crawl_and_ingest
 
 # --- Flask setup ---
 app = Flask(__name__)
