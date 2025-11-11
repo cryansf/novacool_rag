@@ -3,180 +3,165 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Novacool RAG Uploader & Crawler Control</title>
+  <title>Novacool RAG | Persistent File Uploader</title>
+
+  <!-- Bootstrap CSS -->
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+  />
+
   <style>
     body {
-      font-family: system-ui, sans-serif;
-      background: #f8faff;
-      margin: 0;
-      padding: 0;
-    }
-    .container {
-      max-width: 900px;
-      margin: 2rem auto;
-      background: white;
+      background: #f8fafc;
+      font-family: system-ui, -apple-system, sans-serif;
       padding: 2rem;
-      border-radius: 12px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
     }
-    h1, h2 {
-      color: #004aad;
-      margin-bottom: 1rem;
+    .upload-card {
+      max-width: 700px;
+      margin: 0 auto;
+      background: #fff;
+      border-radius: 1rem;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+      padding: 2rem 2.5rem;
     }
-    button {
-      background: #004aad;
-      color: white;
-      border: none;
-      padding: 10px 18px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 1rem;
-      margin-right: 8px;
+    .progress {
+      height: 8px;
+      margin-top: 10px;
+      display: none;
     }
-    button:hover {
-      background: #003580;
+    .file-link {
+      text-decoration: none;
     }
-    input[type="text"], input[type="file"] {
-      padding: 8px;
-      border-radius: 6px;
-      border: 1px solid #ccc;
-      width: 100%;
-      margin-bottom: 1rem;
-      font-size: 1rem;
-    }
-    .status {
-      background: #eef4ff;
-      border-left: 4px solid #004aad;
-      padding: 10px;
-      margin-top: 12px;
-      border-radius: 6px;
-      font-size: 0.95rem;
-    }
-    .section {
-      margin-top: 2rem;
-      padding-top: 1rem;
-      border-top: 2px solid #eee;
-    }
-    .file-list {
-      background: #fafafa;
-      border-radius: 6px;
-      padding: 10px;
-      font-size: 0.9rem;
+    .file-link:hover {
+      text-decoration: underline;
     }
   </style>
 </head>
+
 <body>
-  <div class="container">
-    <h1>🕷️ Crawl Control Panel</h1>
+  <div class="upload-card">
+    <h3 class="text-center mb-4 text-primary">📤 Upload Files to Persistent Storage</h3>
 
-    <label>Base URL to crawl:</label>
-    <input type="text" id="crawlUrl" placeholder="https://novacool.com" value="https://novacool.com" />
-    <div>
-      <button onclick="startCrawl()">Start Crawl</button>
-      <button onclick="pauseCrawl()">Pause / Resume</button>
-      <button onclick="stopCrawl()">Stop Crawl</button>
-    </div>
-    <div class="status" id="crawlStatus">Status: Idle | Active: false | Progress: 0%</div>
+    <form id="uploadForm" enctype="multipart/form-data">
+      <div class="mb-3">
+        <input class="form-control" type="file" id="fileInput" name="file" required />
+      </div>
+      <button class="btn btn-primary w-100" type="submit">Upload File</button>
+    </form>
 
-    <div class="section">
-      <h2>📘 Knowledge Base</h2>
-      <button onclick="downloadFile('/data/manifest.json')">Download Manifest (JSON)</button>
-      <button onclick="downloadFile('/data/knowledge_base.txt')">Download Knowledge Base (TXT)</button>
-    </div>
-
-    <div class="section">
-      <h2>📤 Upload Documents</h2>
-      <p>Select multiple files (.pdf, .docx, .txt) to add to your knowledge base.</p>
-      <input type="file" id="fileInput" multiple />
-      <button onclick="uploadFiles()">Upload</button>
-      <div class="status" id="uploadStatus">Waiting for uploads...</div>
+    <div class="progress mt-3">
+      <div
+        id="progressBar"
+        class="progress-bar progress-bar-striped progress-bar-animated"
+        role="progressbar"
+        style="width: 0%"
+      ></div>
     </div>
 
-    <div class="section">
-      <h2>💾 Persistent Storage</h2>
-      <button onclick="listUploads()">Check Uploaded Files</button>
-      <div id="fileList" class="file-list">No uploads checked yet.</div>
+    <div id="statusMsg" class="mt-3 text-center fw-medium"></div>
+
+    <hr />
+
+    <div class="mt-3">
+      <h5>📁 Uploaded Files (Persistent)</h5>
+      <ul id="uploadedFiles" class="list-group small"></ul>
     </div>
   </div>
 
   <script>
-    async function startCrawl() {
-      const url = document.getElementById("crawlUrl").value.trim();
-      if (!url) return alert("Please enter a base URL.");
-      try {
-        const res = await fetch("/start_crawl", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url })
-        });
-        const data = await res.json();
-        document.getElementById("crawlStatus").textContent = data.message || data.error;
-      } catch (err) {
-        document.getElementById("crawlStatus").textContent = "Error starting crawl: " + err.message;
+    const form = document.getElementById("uploadForm");
+    const fileInput = document.getElementById("fileInput");
+    const statusMsg = document.getElementById("statusMsg");
+    const progressBar = document.getElementById("progressBar");
+    const progressContainer = document.querySelector(".progress");
+    const uploadedFilesList = document.getElementById("uploadedFiles");
+
+    // Handle new file uploads
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const file = fileInput.files[0];
+      if (!file) {
+        statusMsg.innerHTML = "<span class='text-danger'>Please select a file.</span>";
+        return;
       }
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      progressContainer.style.display = "block";
+      progressBar.style.width = "0%";
+      statusMsg.textContent = "Uploading...";
+
+      try {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", "/upload", true);
+
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            const percent = ((event.loaded / event.total) * 100).toFixed(0);
+            progressBar.style.width = percent + "%";
+          }
+        };
+
+        xhr.onload = () => {
+          if (xhr.status === 200) {
+            const response = JSON.parse(xhr.responseText);
+            statusMsg.innerHTML = `<span class='text-success'>${response.message}</span>`;
+            addToFileList(file.name);
+          } else {
+            const err = JSON.parse(xhr.responseText);
+            statusMsg.innerHTML = `<span class='text-danger'>Error: ${err.error}</span>`;
+          }
+          progressBar.style.width = "100%";
+        };
+
+        xhr.onerror = () => {
+          statusMsg.innerHTML = "<span class='text-danger'>Upload failed. Try again.</span>";
+        };
+
+        xhr.send(formData);
+      } catch (err) {
+        console.error(err);
+        statusMsg.innerHTML = "<span class='text-danger'>Unexpected error occurred.</span>";
+      }
+    });
+
+    // Add uploaded file to list
+    function addToFileList(filename) {
+      const li = document.createElement("li");
+      li.classList.add("list-group-item");
+      li.innerHTML = `<a class="file-link" href="/uploads/${filename}" target="_blank">${filename}</a>`;
+      uploadedFilesList.prepend(li);
     }
 
-    async function pauseCrawl() {
-      const res = await fetch("/pause_crawl");
-      const data = await res.json();
-      document.getElementById("crawlStatus").textContent = data.message || "Pause error";
-    }
+    // Load all existing files from persistent storage
+    async function loadExistingFiles() {
+      try {
+        const res = await fetch("/check_uploads");
+        const data = await res.json();
+        uploadedFilesList.innerHTML = "";
 
-    async function stopCrawl() {
-      const res = await fetch("/stop_crawl");
-      const data = await res.json();
-      document.getElementById("crawlStatus").textContent = data.message || "Stop error";
-    }
-
-    async function uploadFiles() {
-      const files = document.getElementById("fileInput").files;
-      const statusDiv = document.getElementById("uploadStatus");
-      if (!files.length) return alert("No files selected.");
-
-      statusDiv.textContent = `Uploading ${files.length} file(s)...`;
-      for (const file of files) {
-        const formData = new FormData();
-        formData.append("file", file);
-        try {
-          const res = await fetch("/upload", { method: "POST", body: formData });
-          const data = await res.json();
-          statusDiv.textContent = data.message || data.error;
-        } catch (err) {
-          statusDiv.textContent = "Upload failed: " + err.message;
+        if (data.files && data.files.length > 0) {
+          data.files.forEach((url) => {
+            const filename = url.split("/").pop();
+            const li = document.createElement("li");
+            li.classList.add("list-group-item");
+            li.innerHTML = `<a class="file-link" href="${url}" target="_blank">${filename}</a>`;
+            uploadedFilesList.appendChild(li);
+          });
+        } else {
+          uploadedFilesList.innerHTML = `<li class="list-group-item text-muted">No files uploaded yet.</li>`;
         }
-      }
-    }
-
-    async function listUploads() {
-      const res = await fetch("/uploads");
-      const data = await res.json();
-      const div = document.getElementById("fileList");
-      if (!data.files || !data.files.length) {
-        div.textContent = "No uploaded files found.";
-      } else {
-        div.innerHTML = `📂 Upload Folder: /opt/render/project/data/uploads<br>
-                         📦 File Count: ${data.count}<br><br>
-                         <ul>${data.files.map(f => `<li>${f}</li>`).join("")}</ul>`;
-      }
-    }
-
-    async function downloadFile(path) {
-      window.open(path, "_blank");
-    }
-
-    // Auto-refresh crawler status
-    async function pollStatus() {
-      try {
-        const res = await fetch("/crawler_status");
-        const data = await res.json();
-        document.getElementById("crawlStatus").textContent =
-          `Status: ${data.status} | Active: ${data.active} | Progress: ${data.progress}%`;
       } catch (err) {
-        console.warn("Status check failed:", err.message);
+        console.error("Failed to load uploads:", err);
+        uploadedFilesList.innerHTML = `<li class="list-group-item text-danger">Error loading uploads.</li>`;
       }
-      setTimeout(pollStatus, 4000);
     }
-    pollStatus();
+
+    // Auto-load list on page open
+    window.addEventListener("DOMContentLoaded", loadExistingFiles);
   </script>
 </body>
 </html>
