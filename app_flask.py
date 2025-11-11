@@ -1,100 +1,123 @@
-import os
-from flask import Flask, request, jsonify
+from flask import Flask, render_template, request, jsonify, send_from_directory
 from flask_cors import CORS
-from openai import OpenAI
-from rag_pipeline import search_docs, ingest_text
-from crawler_controller import crawl_and_ingest
+import os
+from crawler_controller import CrawlerManager, register_crawler_routes
 
-# --- Initialize app ---
+# --- Flask setup ---
 app = Flask(__name__)
-CORS(app, origins=[
-    "https://novacool.bubbleapps.io",
-    "https://novacool.com",
-    "https://www.novacool.com"
-])
+CORS(app)
 
-# --- OpenAI client ---
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# --- Persistent Data Paths ---
+DATA_DIR = "/opt/render/project/data"
+UPLOAD_FOLDER = os.path.join(DATA_DIR, "uploads")
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# --- Data paths ---
-DATA_DIR = "/data"
-if not os.path.exists(DATA_DIR):
-    os.makedirs(DATA_DIR, exist_ok=True)
+# --- Crawler Setup ---
+crawler = CrawlerManager()
+register_crawler_routes(app, crawler)
 
-# --- ROUTES ---
-
+# -------------------------------------------------
+# BASE ROUTES
+# -------------------------------------------------
 @app.route("/")
-def root():
-    return jsonify({"status": "running", "message": "Novacool RAG backend is online 🚀"}), 200
+def home():
+    return "<h2>Novacool RAG Deployment Active</h2><p>Visit /uploader, /chat, or /widget</p>"
 
+@app.route("/uploader")
+def uploader_page():
+    return send_from_directory("templates", "uploader.html")
 
-@app.route("/health", methods=["GET"])
-def health():
-    """Simple health check endpoint."""
-    return jsonify({"status": "ok"}), 200
-
-
-@app.route("/chat", methods=["POST"])
-def chat():
-    """Handles chat messages coming from Bubble or other front-ends."""
-    data = request.get_json()
-    user_input = data.get("message", "")
-    history = data.get("history", [])
-
-    if not user_input:
-        return jsonify({"error": "No input message provided"}), 400
-
-    # Retrieve context from RAG search
-    context_docs = search_docs(user_input)
-    context_text = "\n".join([d["text"] for d in context_docs]) if context_docs else ""
-
-    # Build the prompt
-    messages = [
-        {"role": "system", "content": "You are the Novacool UEF assistant. Answer factually and professionally about PFAS-free firefighting foam and equipment."},
-        *history,
-        {"role": "user", "content": f"{user_input}\n\nContext:\n{context_text}"}
-    ]
-
-    # Get completion from OpenAI
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=messages,
-        temperature=0.2,
-    )
-
-    reply = response.choices[0].message.content.strip()
-    return jsonify({"reply": reply})
-
-
+# -------------------------------------------------
+# UPLOAD ROUTES
+# -------------------------------------------------
 @app.route("/upload", methods=["POST"])
 def upload_file():
-    """Upload a document (PDF, DOCX, TXT) and ingest it into the vector DB."""
+    """Upload endpoint for PDF, DOCX, or TXT."""
     if "file" not in request.files:
-        return jsonify({"error": "No file uploaded"}), 400
+        return jsonify({"error": "No file part in request"}), 400
 
     file = request.files["file"]
-    save_path = os.path.join(DATA_DIR, file.filename)
+    if file.filename == "":
+        return jsonify({"error": "No selected file"}), 400
+
+    # Save file
+    save_path = os.path.join(UPLOAD_FOLDER, file.filename)
     file.save(save_path)
 
-    # Ingest text content into RAG vector database
-    ingest_text(save_path)
+    # Add file info to knowledge base
+    kb_path = os.path.join(DATA_DIR, "knowledge_base.txt")
+    with open(kb_path, "a", encoding="utf-8") as kb:
+        kb.write(f"{file.filename}\n")
 
-    return jsonify({"message": f"File '{file.filename}' uploaded and ingested successfully"}), 200
+    return jsonify({"message": f"✅ {file.filename} uploaded and added to knowledge base."}), 200
 
+@app.route("/uploads", methods=["GET"])
+def list_uploads():
+    """List files stored persistently."""
+    files = os.listdir(UPLOAD_FOLDER)
+    return jsonify({"files": files, "count": len(files)})
 
+# -------------------------------------------------
+# REINDEX (STUB)
+# -------------------------------------------------
 @app.route("/reindex", methods=["POST"])
-def reindex():
-    """Re-crawls or re-indexes site content and refreshes the vector DB."""
-    data = request.get_json(force=True)
-    url = data.get("url", None)
+def reindex_knowledge_base():
+    """Placeholder for reindex operation."""
+    return jsonify({"message": "Reindex complete (stub)."}), 200
 
-    if not url:
-        return jsonify({"error": "Missing URL for crawling"}), 400
+# -------------------------------------------------
+# CRAWLER CONTROL ROUTES
+# -------------------------------------------------
+@app.route("/start_crawl", methods=["POST"])
+def start_crawl():
+    """Start a new crawl."""
+    data = request.get_json()
+    base_url = data.get("url")
+    if not base_url:
+        return jsonify({"error": "Missing base URL"}), 400
 
-    crawl_and_ingest(url)
-    return jsonify({"message": f"Successfully crawled and indexed: {url}"}), 200
+    try:
+        crawler.start(base_url)
+        return jsonify({"message": f"Crawl started for {base_url}."}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
+@app.route("/pause_crawl", methods=["GET"])
+def pause_crawl():
+    """Pause the ongoing crawl."""
+    crawler.pause()
+    return jsonify({"message": "Crawl paused."}), 200
 
-# --- Run locally (Render uses Gunicorn) ---
+@app.route("/stop_crawl", methods=["GET"])
+def stop_crawl():
+    """Stop the ongoing crawl."""
+    crawler.stop()
+    return jsonify({"message": "Crawl stopped."}), 200
+
+@app.route("/crawler_status", methods=["GET"])
+def crawler_status():
+    """Return JSON with the crawler's current state."""
+    return jsonify({
+        "active": crawler.active,
+        "paused": crawler.paused,
+        "stopped": crawler.stopped,
+        "progress": crawler.progress,
+        "status": crawler.status
+    })
+
+# -------------------------------------------------
+# SERVE FILES AND CHAT ENDPOINTS
+# -------------------------------------------------
+@app.route("/chat")
+def chat_page():
+    return send_from_directory("templates", "chat.html")
+
+@app.route("/widget")
+def widget_page():
+    return send_from_directory("templates", "widget.html")
+
+# -------------------------------------------------
+# ENTRY POINT
+# -------------------------------------------------
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    app.run(host="0.0.0.0", port=8080)

@@ -3,86 +3,180 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Novacool Knowledge Uploader</title>
+  <title>Novacool RAG Uploader & Crawler Control</title>
   <style>
     body {
       font-family: system-ui, sans-serif;
-      background-color: #f4f6f8;
+      background: #f8faff;
       margin: 0;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
+      padding: 0;
     }
-    .uploader-box {
+    .container {
+      max-width: 900px;
+      margin: 2rem auto;
       background: white;
-      border: 2px solid #0056a3;
-      border-radius: 10px;
-      padding: 30px;
-      width: 400px;
-      text-align: center;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+      padding: 2rem;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
     }
-    h1 {
-      color: #0056a3;
-      margin-bottom: 20px;
-    }
-    input[type="url"], input[type="file"] {
-      width: 100%;
-      padding: 10px;
-      margin: 10px 0;
-      border-radius: 6px;
-      border: 1px solid #ccc;
+    h1, h2 {
+      color: #004aad;
+      margin-bottom: 1rem;
     }
     button {
-      background-color: #0056a3;
+      background: #004aad;
       color: white;
       border: none;
       padding: 10px 18px;
       border-radius: 6px;
       cursor: pointer;
-      font-weight: 600;
+      font-size: 1rem;
+      margin-right: 8px;
     }
     button:hover {
-      background-color: #004080;
+      background: #003580;
     }
-    .result {
-      margin-top: 15px;
-      color: #333;
+    input[type="text"], input[type="file"] {
+      padding: 8px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      width: 100%;
+      margin-bottom: 1rem;
+      font-size: 1rem;
+    }
+    .status {
+      background: #eef4ff;
+      border-left: 4px solid #004aad;
+      padding: 10px;
+      margin-top: 12px;
+      border-radius: 6px;
+      font-size: 0.95rem;
+    }
+    .section {
+      margin-top: 2rem;
+      padding-top: 1rem;
+      border-top: 2px solid #eee;
+    }
+    .file-list {
+      background: #fafafa;
+      border-radius: 6px;
+      padding: 10px;
+      font-size: 0.9rem;
     }
   </style>
 </head>
 <body>
-  <div class="uploader-box">
-    <h1>Novacool Ingestion</h1>
-    <p>Enter a webpage URL to crawl and add to the knowledge base:</p>
-    <input type="url" id="url-input" placeholder="https://example.com/article" />
-    <button onclick="crawl()">Crawl & Ingest</button>
-    <div class="result" id="result"></div>
+  <div class="container">
+    <h1>🕷️ Crawl Control Panel</h1>
+
+    <label>Base URL to crawl:</label>
+    <input type="text" id="crawlUrl" placeholder="https://novacool.com" value="https://novacool.com" />
+    <div>
+      <button onclick="startCrawl()">Start Crawl</button>
+      <button onclick="pauseCrawl()">Pause / Resume</button>
+      <button onclick="stopCrawl()">Stop Crawl</button>
+    </div>
+    <div class="status" id="crawlStatus">Status: Idle | Active: false | Progress: 0%</div>
+
+    <div class="section">
+      <h2>📘 Knowledge Base</h2>
+      <button onclick="downloadFile('/data/manifest.json')">Download Manifest (JSON)</button>
+      <button onclick="downloadFile('/data/knowledge_base.txt')">Download Knowledge Base (TXT)</button>
+    </div>
+
+    <div class="section">
+      <h2>📤 Upload Documents</h2>
+      <p>Select multiple files (.pdf, .docx, .txt) to add to your knowledge base.</p>
+      <input type="file" id="fileInput" multiple />
+      <button onclick="uploadFiles()">Upload</button>
+      <div class="status" id="uploadStatus">Waiting for uploads...</div>
+    </div>
+
+    <div class="section">
+      <h2>💾 Persistent Storage</h2>
+      <button onclick="listUploads()">Check Uploaded Files</button>
+      <div id="fileList" class="file-list">No uploads checked yet.</div>
+    </div>
   </div>
 
   <script>
-    async function crawl() {
-      const url = document.getElementById("url-input").value.trim();
-      const resultDiv = document.getElementById("result");
-      if (!url) {
-        resultDiv.textContent = "Please enter a valid URL.";
-        return;
-      }
-
-      resultDiv.textContent = "Processing...";
+    async function startCrawl() {
+      const url = document.getElementById("crawlUrl").value.trim();
+      if (!url) return alert("Please enter a base URL.");
       try {
-        const response = await fetch("/crawl", {
+        const res = await fetch("/start_crawl", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url }),
+          body: JSON.stringify({ url })
         });
-        const data = await response.json();
-        resultDiv.textContent = data.message || "Done.";
+        const data = await res.json();
+        document.getElementById("crawlStatus").textContent = data.message || data.error;
       } catch (err) {
-        resultDiv.textContent = "Error: " + err.message;
+        document.getElementById("crawlStatus").textContent = "Error starting crawl: " + err.message;
       }
     }
+
+    async function pauseCrawl() {
+      const res = await fetch("/pause_crawl");
+      const data = await res.json();
+      document.getElementById("crawlStatus").textContent = data.message || "Pause error";
+    }
+
+    async function stopCrawl() {
+      const res = await fetch("/stop_crawl");
+      const data = await res.json();
+      document.getElementById("crawlStatus").textContent = data.message || "Stop error";
+    }
+
+    async function uploadFiles() {
+      const files = document.getElementById("fileInput").files;
+      const statusDiv = document.getElementById("uploadStatus");
+      if (!files.length) return alert("No files selected.");
+
+      statusDiv.textContent = `Uploading ${files.length} file(s)...`;
+      for (const file of files) {
+        const formData = new FormData();
+        formData.append("file", file);
+        try {
+          const res = await fetch("/upload", { method: "POST", body: formData });
+          const data = await res.json();
+          statusDiv.textContent = data.message || data.error;
+        } catch (err) {
+          statusDiv.textContent = "Upload failed: " + err.message;
+        }
+      }
+    }
+
+    async function listUploads() {
+      const res = await fetch("/uploads");
+      const data = await res.json();
+      const div = document.getElementById("fileList");
+      if (!data.files || !data.files.length) {
+        div.textContent = "No uploaded files found.";
+      } else {
+        div.innerHTML = `📂 Upload Folder: /opt/render/project/data/uploads<br>
+                         📦 File Count: ${data.count}<br><br>
+                         <ul>${data.files.map(f => `<li>${f}</li>`).join("")}</ul>`;
+      }
+    }
+
+    async function downloadFile(path) {
+      window.open(path, "_blank");
+    }
+
+    // Auto-refresh crawler status
+    async function pollStatus() {
+      try {
+        const res = await fetch("/crawler_status");
+        const data = await res.json();
+        document.getElementById("crawlStatus").textContent =
+          `Status: ${data.status} | Active: ${data.active} | Progress: ${data.progress}%`;
+      } catch (err) {
+        console.warn("Status check failed:", err.message);
+      }
+      setTimeout(pollStatus, 4000);
+    }
+    pollStatus();
   </script>
 </body>
 </html>
