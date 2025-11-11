@@ -37,6 +37,10 @@
       box-shadow: 0 4px 8px rgba(0,0,0,0.3);
       z-index: 9999;
       font-size: 24px;
+      transition: transform 0.2s;
+    }
+    #chat-bubble:hover {
+      transform: scale(1.1);
     }
     #chat-window {
       position: fixed;
@@ -135,6 +139,9 @@
   </div>
 
   <script>
+  document.addEventListener("DOMContentLoaded", () => {
+    console.log("✅ Uploader + Chat loaded");
+
     // --- Uploader logic ---
     const uploadForm = document.getElementById("uploadForm");
     const statusBox = document.getElementById("status");
@@ -183,15 +190,26 @@
     }
     loadFiles();
 
-    // --- Chat bubble toggle ---
+    // --- Chat bubble logic ---
     const chatBubble = document.getElementById("chat-bubble");
     const chatWindow = document.getElementById("chat-window");
     const chatBody = document.getElementById("chat-body");
     const chatInput = document.getElementById("chat-input");
     const chatSend = document.getElementById("chat-send");
 
+    if (!chatBubble || !chatWindow) {
+      console.error("⚠️ Chat bubble elements not found!");
+      return;
+    }
+
     chatBubble.addEventListener("click", () => {
-      chatWindow.style.display = chatWindow.style.display === "flex" ? "none" : "flex";
+      console.log("💬 Chat bubble clicked");
+      if (chatWindow.style.display === "flex") {
+        chatWindow.style.display = "none";
+      } else {
+        chatWindow.style.display = "flex";
+        chatInput.focus();
+      }
     });
 
     chatSend.addEventListener("click", sendMessage);
@@ -206,6 +224,7 @@
       appendMessage(text, "user-msg");
       chatInput.value = "";
 
+      appendMessage("🤖 Typing...", "bot-msg");
       try {
         const res = await fetch("/chat", {
           method: "POST",
@@ -213,10 +232,9 @@
           body: JSON.stringify({ query: text })
         });
         const data = await res.json();
-        if (data.error) appendMessage("⚠️ " + data.error, "bot-msg");
-        else if (data.results && data.results.length) appendMessage(data.results.join("\\n"), "bot-msg");
-        else if (data.message) appendMessage(data.message, "bot-msg");
-        else appendMessage("🤖 No response received.", "bot-msg");
+        const lastBot = chatBody.querySelector(".bot-msg:last-child");
+        if (data.error) lastBot.textContent = "⚠️ " + data.error;
+        else lastBot.textContent = data.message || "✅ Got it!";
       } catch (err) {
         appendMessage("❌ Network error: " + err.message, "bot-msg");
       }
@@ -229,6 +247,7 @@
       chatBody.appendChild(div);
       chatBody.scrollTop = chatBody.scrollHeight;
     }
+  });
   </script>
 
 </body>
