@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, jsonify, send_from_directory
 from flask_cors import CORS
 import os
 from crawler_controller import crawl_and_ingest
+from rag_pipeline import ingest_text, search_docs
 
 # --- Flask setup ---
 app = Flask(__name__)
@@ -11,10 +12,6 @@ CORS(app)
 DATA_DIR = "/opt/render/project/data"
 UPLOAD_FOLDER = os.path.join(DATA_DIR, "uploads")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
-# --- Crawler Setup ---
-crawler = CrawlerManager()
-register_crawler_routes(app, crawler)
 
 # -------------------------------------------------
 # BASE ROUTES
