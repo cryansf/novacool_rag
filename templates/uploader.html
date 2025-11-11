@@ -3,155 +3,233 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Novacool RAG Control Panel</title>
+  <title>Novacool RAG Uploader + Chat</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
-    body { background-color: #f8f9fa; font-family: system-ui, sans-serif; }
-    h2 { font-size: 1.4rem; font-weight: 700; margin-bottom: 0.8rem; }
-    #logConsole {
-      background: #111; color: #0f0; font-family: monospace;
-      height: 240px; overflow-y: scroll; border-radius: 6px; padding: 10px;
+    body {
+      background-color: #f8fafc;
+      font-family: system-ui, sans-serif;
     }
-    #chatResponse {
+    .container {
+      max-width: 900px;
+      margin-top: 60px;
+    }
+    #status {
       white-space: pre-wrap;
-      background: #fff;
+      font-family: monospace;
+      margin-top: 10px;
+    }
+
+    /* --- Chat bubble styles --- */
+    #chat-bubble {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: #0d6efd;
+      color: white;
+      border-radius: 50%;
+      width: 60px;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+      z-index: 9999;
+      font-size: 24px;
+    }
+    #chat-window {
+      position: fixed;
+      bottom: 90px;
+      right: 20px;
+      width: 360px;
+      max-height: 500px;
+      background: white;
       border: 1px solid #ccc;
+      border-radius: 10px;
+      display: none;
+      flex-direction: column;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      z-index: 9998;
+    }
+    #chat-header {
+      background: #0d6efd;
+      color: white;
       padding: 10px;
-      border-radius: 6px;
-      min-height: 100px;
+      border-top-left-radius: 10px;
+      border-top-right-radius: 10px;
+      font-weight: 600;
+      text-align: center;
+    }
+    #chat-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px;
+    }
+    .chat-msg {
+      margin: 8px 0;
+      padding: 8px 12px;
+      border-radius: 12px;
+      max-width: 80%;
+    }
+    .user-msg {
+      background: #e3f2fd;
+      align-self: flex-end;
+    }
+    .bot-msg {
+      background: #f1f3f4;
+      align-self: flex-start;
+    }
+    #chat-input-area {
+      display: flex;
+      padding: 10px;
+      border-top: 1px solid #ddd;
+    }
+    #chat-input {
+      flex: 1;
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      outline: none;
+    }
+    #chat-send {
+      margin-left: 8px;
+      padding: 8px 14px;
+      border: none;
+      background: #0d6efd;
+      color: white;
+      border-radius: 8px;
+      cursor: pointer;
     }
   </style>
 </head>
-<body class="p-4">
-  <div class="container-fluid">
-    <div class="row g-4">
-      <!-- LEFT: FILE UPLOADER -->
-      <div class="col-lg-4">
-        <h2>📁 Upload Files</h2>
-        <form id="uploadForm">
-          <input class="form-control mb-2" type="file" id="fileInput" name="file">
-          <button class="btn btn-primary w-100" type="submit">Upload</button>
-        </form>
-        <div id="uploadStatus" class="text-success small my-2"></div>
-        <h6>📂 Uploaded Files (Persistent)</h6>
-        <ul id="fileList" class="small"></ul>
-      </div>
+<body>
 
-      <!-- MIDDLE: CRAWLER -->
-      <div class="col-lg-4">
-        <h2>🕷️ Crawler Console</h2>
-        <div class="input-group mb-2">
-          <input type="url" id="crawlUrl" class="form-control" placeholder="Enter URL to crawl">
-        </div>
-        <div class="d-flex gap-2 mb-2">
-          <button class="btn btn-success flex-fill" id="startCrawl">Start</button>
-          <button class="btn btn-warning flex-fill" id="pauseCrawl">Pause/Resume</button>
-          <button class="btn btn-danger flex-fill" id="stopCrawl">Stop</button>
-          <button class="btn btn-secondary flex-fill" id="clearLogs">Clear Logs</button>
-        </div>
-        <div id="crawlStatus" class="small text-muted mb-2"></div>
-        <h6>📜 Logs</h6>
-        <pre id="logConsole"></pre>
-      </div>
+  <div class="container text-center">
+    <h2 class="mb-4 fw-bold text-primary">📂 Novacool RAG File Uploader</h2>
 
-      <!-- RIGHT: CHAT -->
-      <div class="col-lg-4">
-        <h2>💬 Chat / Query Engine</h2>
-        <div class="mb-2">
-          <textarea id="chatInput" class="form-control" rows="3" placeholder="Ask about any uploaded or crawled content..."></textarea>
-        </div>
-        <button class="btn btn-info w-100 mb-3" id="sendChat">Send Query</button>
-        <h6>Response:</h6>
-        <div id="chatResponse" class="small"></div>
+    <form id="uploadForm" class="p-3 border rounded bg-light shadow-sm">
+      <div class="mb-3">
+        <input class="form-control" type="file" id="fileInput" multiple />
       </div>
+      <button type="submit" class="btn btn-primary w-100">Upload Files</button>
+    </form>
+
+    <div id="status" class="alert alert-secondary mt-3 text-start" style="display:none;"></div>
+
+    <h5 class="mt-5 fw-semibold">📁 Persistent Files in /data/uploads</h5>
+    <ul id="fileList" class="list-group text-start mt-2"></ul>
+  </div>
+
+  <!-- Floating Chat Bubble -->
+  <div id="chat-bubble">💬</div>
+
+  <!-- Chat Window -->
+  <div id="chat-window">
+    <div id="chat-header">Novacool Assistant</div>
+    <div id="chat-body"></div>
+    <div id="chat-input-area">
+      <input type="text" id="chat-input" placeholder="Ask me anything..." />
+      <button id="chat-send">Send</button>
     </div>
   </div>
 
   <script>
-    const logConsole = document.getElementById("logConsole");
-    const crawlStatus = document.getElementById("crawlStatus");
+    // --- Uploader logic ---
+    const uploadForm = document.getElementById("uploadForm");
+    const statusBox = document.getElementById("status");
+    const fileList = document.getElementById("fileList");
 
-    // ---------- FILE UPLOAD ----------
-    document.getElementById("uploadForm").addEventListener("submit", async (e) => {
+    uploadForm.addEventListener("submit", async (e) => {
       e.preventDefault();
-      const file = document.getElementById("fileInput").files[0];
-      if (!file) return alert("Select a file first.");
+      const files = document.getElementById("fileInput").files;
+      if (!files.length) return alert("Please choose a file to upload.");
+
+      statusBox.style.display = "block";
+      statusBox.textContent = "Uploading...";
+
       const formData = new FormData();
-      formData.append("file", file);
-      const res = await fetch("/upload", { method: "POST", body: formData });
-      const data = await res.json();
-      document.getElementById("uploadStatus").innerText = data.message || data.error;
-      loadFiles();
+      for (const file of files) formData.append("file", file);
+
+      try {
+        const response = await fetch("/upload", { method: "POST", body: formData });
+        const result = await response.json();
+        if (result.error) throw new Error(result.error);
+        statusBox.textContent = result.message;
+        loadFiles();
+      } catch (err) {
+        statusBox.textContent = "Error: " + err.message;
+      }
     });
 
     async function loadFiles() {
-      const res = await fetch("/check_uploads");
-      const data = await res.json();
-      const list = document.getElementById("fileList");
-      list.innerHTML = "";
-      if (data.files) {
-        data.files.forEach(f => {
-          const li = document.createElement("li");
-          li.innerHTML = `<a href="${f}" target="_blank">${f.split('/').pop()}</a>`;
-          list.appendChild(li);
+      try {
+        const res = await fetch("/check_uploads");
+        const data = await res.json();
+        fileList.innerHTML = "";
+        if (data.files && data.files.length) {
+          data.files.forEach(f => {
+            const li = document.createElement("li");
+            li.className = "list-group-item";
+            li.innerHTML = `<a href="${f}" target="_blank">${f}</a>`;
+            fileList.appendChild(li);
+          });
+        } else {
+          fileList.innerHTML = "<li class='list-group-item'>No uploaded files yet.</li>";
+        }
+      } catch {
+        fileList.innerHTML = "<li class='list-group-item text-danger'>Failed to load uploads.</li>";
+      }
+    }
+    loadFiles();
+
+    // --- Chat bubble toggle ---
+    const chatBubble = document.getElementById("chat-bubble");
+    const chatWindow = document.getElementById("chat-window");
+    const chatBody = document.getElementById("chat-body");
+    const chatInput = document.getElementById("chat-input");
+    const chatSend = document.getElementById("chat-send");
+
+    chatBubble.addEventListener("click", () => {
+      chatWindow.style.display = chatWindow.style.display === "flex" ? "none" : "flex";
+    });
+
+    chatSend.addEventListener("click", sendMessage);
+    chatInput.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") sendMessage();
+    });
+
+    async function sendMessage() {
+      const text = chatInput.value.trim();
+      if (!text) return;
+
+      appendMessage(text, "user-msg");
+      chatInput.value = "";
+
+      try {
+        const res = await fetch("/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: text })
         });
+        const data = await res.json();
+        if (data.error) appendMessage("⚠️ " + data.error, "bot-msg");
+        else if (data.results && data.results.length) appendMessage(data.results.join("\\n"), "bot-msg");
+        else if (data.message) appendMessage(data.message, "bot-msg");
+        else appendMessage("🤖 No response received.", "bot-msg");
+      } catch (err) {
+        appendMessage("❌ Network error: " + err.message, "bot-msg");
       }
     }
 
-    // ---------- CRAWLER ----------
-    document.getElementById("startCrawl").addEventListener("click", async () => {
-      const url = document.getElementById("crawlUrl").value.trim();
-      if (!url) return alert("Enter a URL first.");
-      const res = await fetch("/start_crawl", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url })
-      });
-      const data = await res.json();
-      crawlStatus.innerText = data.message || data.error;
-    });
-
-    document.getElementById("pauseCrawl").addEventListener("click", async () => {
-      const res = await fetch("/pause_crawl", { method: "POST" });
-      const data = await res.json();
-      crawlStatus.innerText = data.message;
-    });
-
-    document.getElementById("stopCrawl").addEventListener("click", async () => {
-      const res = await fetch("/stop_crawl", { method: "POST" });
-      const data = await res.json();
-      crawlStatus.innerText = data.message;
-    });
-
-    document.getElementById("clearLogs").addEventListener("click", () => {
-      logConsole.textContent = "";
-    });
-
-    async function refreshLogs() {
-      const res = await fetch("/crawl_status");
-      const data = await res.json();
-      logConsole.textContent = data.logs.join("\n");
-      logConsole.scrollTop = logConsole.scrollHeight;
+    function appendMessage(msg, cls) {
+      const div = document.createElement("div");
+      div.className = "chat-msg " + cls;
+      div.textContent = msg;
+      chatBody.appendChild(div);
+      chatBody.scrollTop = chatBody.scrollHeight;
     }
-
-    // ---------- CHAT ----------
-    document.getElementById("sendChat").addEventListener("click", async () => {
-      const query = document.getElementById("chatInput").value.trim();
-      if (!query) return alert("Enter a query first.");
-      document.getElementById("chatResponse").innerText = "⏳ Thinking...";
-      const res = await fetch("/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query })
-      });
-      const data = await res.json();
-      document.getElementById("chatResponse").innerText = data.results
-        ? JSON.stringify(data.results, null, 2)
-        : data.error || "No response.";
-    });
-
-    setInterval(refreshLogs, 3000);
-    loadFiles();
   </script>
+
 </body>
 </html>
