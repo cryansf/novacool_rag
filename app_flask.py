@@ -2,7 +2,7 @@ from flask import Flask, render_template, request, jsonify, send_from_directory
 from flask_cors import CORS
 import os
 
-# Import your modules
+# Import modules
 from crawler_controller import crawl_and_ingest
 from rag_pipeline import ingest_text, search_docs
 
@@ -12,9 +12,17 @@ from rag_pipeline import ingest_text, search_docs
 app = Flask(__name__)
 CORS(app)
 
-# Persistent storage directory for Render
+# Persistent folder (Render’s /data is preserved across deploys)
 UPLOAD_FOLDER = "/data/uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+# -----------------------------------------------------------------------------
+# Root - Uploader Page
+# -----------------------------------------------------------------------------
+@app.route("/", methods=["GET"])
+def uploader_page():
+    """Serve the Bootstrap uploader interface."""
+    return render_template("uploader.html")
 
 # -----------------------------------------------------------------------------
 # Health Check
@@ -24,11 +32,11 @@ def health_check():
     return jsonify({"status": "ok"})
 
 # -----------------------------------------------------------------------------
-# File Upload Route (Persistent Storage)
+# Upload File
 # -----------------------------------------------------------------------------
 @app.route("/upload", methods=["POST"])
 def upload_file():
-    """Upload and persist files into the Render /data/uploads directory."""
+    """Upload and persist files into /data/uploads directory."""
     if "file" not in request.files:
         return jsonify({"error": "No file part"}), 400
 
@@ -39,7 +47,10 @@ def upload_file():
     try:
         save_path = os.path.join(UPLOAD_FOLDER, file.filename)
         file.save(save_path)
-        return jsonify({"message": f"File '{file.filename}' saved to {save_path}"}), 200
+        return jsonify({
+            "message": f"File '{file.filename}' saved successfully.",
+            "path": f"/uploads/{file.filename}"
+        }), 200
     except Exception as e:
         return jsonify({"error": f"Failed to save file: {e}"}), 500
 
@@ -52,14 +63,24 @@ def get_uploaded_file(filename):
     return send_from_directory(UPLOAD_FOLDER, filename)
 
 # -----------------------------------------------------------------------------
+# List All Uploaded Files
+# -----------------------------------------------------------------------------
+@app.route("/check_uploads", methods=["GET"])
+def check_uploads():
+    """List all files currently stored in /data/uploads."""
+    try:
+        files = os.listdir(UPLOAD_FOLDER)
+        file_urls = [f"/uploads/{name}" for name in files]
+        return jsonify({"files": file_urls})
+    except Exception as e:
+        return jsonify({"error": f"Unable to list uploads: {e}"}), 500
+
+# -----------------------------------------------------------------------------
 # Crawl and Ingest Endpoint
 # -----------------------------------------------------------------------------
 @app.route("/crawl", methods=["POST"])
 def crawl_route():
-    """
-    Accept a JSON body with {"url": "<https://...>"}.
-    Crawl the target URL and ingest its text into the RAG pipeline.
-    """
+    """Crawl a webpage and ingest its text into the RAG pipeline."""
     data = request.get_json()
     url = data.get("url") if data else None
 
@@ -75,8 +96,8 @@ def crawl_route():
 @app.route("/chat", methods=["POST"])
 def chat():
     """
-    Accept JSON body: {"query": "<user question>"}.
-    Performs RAG search and returns context + generated answer.
+    Accept JSON: {"query": "<user question>"}
+    Performs semantic search and returns results from the RAG pipeline.
     """
     data = request.get_json()
     query = data.get("query", "").strip()
@@ -86,18 +107,23 @@ def chat():
 
     try:
         results = search_docs(query)
-        response = {
+        return jsonify({
             "query": query,
             "results": results,
             "message": "Search completed successfully."
-        }
-        return jsonify(response)
+        })
     except Exception as e:
         return jsonify({"error": f"RAG search failed: {e}"}), 500
 
 # -----------------------------------------------------------------------------
-# Main Entry Point
+# Main Entry
 # -----------------------------------------------------------------------------
+@app.route("/debug", methods=["GET"])
+def debug():
+    routes = [str(r) for r in app.url_map.iter_rules()]
+    return jsonify({"message": "Flask is running!", "routes": routes})
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port, debug=True)
