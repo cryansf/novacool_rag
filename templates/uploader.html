@@ -1,214 +1,270 @@
+<!-- templates/uploader.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Novacool RAG Console</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <title>🧠 Novacool RAG Control Console</title>
   <style>
     body {
-      background: #f8fafc;
-      font-family: system-ui, sans-serif;
-      padding: 2rem;
+      font-family: "Segoe UI", sans-serif;
+      background: #f7f9fc;
+      margin: 0;
+      padding: 20px;
+      color: #222;
     }
-    h1 { color: #0d6efd; font-weight: 700; margin-bottom: 2rem; }
-    .section-title { font-weight: 600; color: #0d6efd; }
-
-    .console-card {
-      background: white;
-      border-radius: 1rem;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-      padding: 1.2rem;
-      height: 500px;
+    h1 {
+      text-align: center;
+      color: #0056d6;
+    }
+    .container {
+      display: flex;
+      gap: 20px;
+      justify-content: space-between;
+      margin-top: 20px;
+    }
+    .panel {
+      flex: 1;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      padding: 20px;
+      overflow: auto;
+    }
+    button {
+      background-color: #007bff;
+      border: none;
+      color: white;
+      padding: 10px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    input[type="file"], input[type="text"] {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      margin-top: 8px;
+    }
+    .file-list a {
+      display: block;
+      color: #0056d6;
+      text-decoration: none;
+      margin-bottom: 5px;
+      font-size: 14px;
+    }
+    .file-list a:hover {
+      text-decoration: underline;
+    }
+    .log-box, .chat-box {
+      background: #111;
+      color: #0f0;
+      font-family: monospace;
+      font-size: 14px;
+      padding: 10px;
+      border-radius: 6px;
+      height: 100px;
       overflow-y: auto;
+      margin-top: 10px;
     }
-
-    #chat-bubble {
-      position: fixed; bottom: 25px; right: 25px;
-      background: #0d6efd; color: #fff; width: 55px; height: 55px;
-      border-radius: 50%; display: flex; align-items: center;
-      justify-content: center; font-size: 26px; cursor: pointer;
-      box-shadow: 0 3px 10px rgba(0,0,0,0.3); z-index: 1000;
+    .result-success {
+      background: #e9ffe9;
+      border-left: 5px solid #28a745;
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 5px;
     }
-    #chat-window {
-      display: none; position: fixed; bottom: 90px; right: 25px;
-      width: 340px; background: white; border-radius: 1rem;
-      box-shadow: 0 8px 20px rgba(0,0,0,0.3); overflow: hidden; z-index: 1000;
+    .result-error {
+      background: #ffe9e9;
+      border-left: 5px solid #dc3545;
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 5px;
     }
-    #chat-header { background: #0d6efd; color: white; text-align: center; padding: 0.75rem; font-weight: 600; }
-    #chat-body { height: 280px; overflow-y: auto; padding: 1rem; font-size: 0.95rem; }
-    #chat-input-area { display: flex; border-top: 1px solid #ddd; }
-    #chat-input { flex: 1; padding: 0.5rem; border: none; outline: none; }
-    #chat-send { background: #0d6efd; color: white; border: none; padding: 0 1rem; cursor: pointer; }
-    pre { font-size: 0.9rem; background: #111; color: #0f0; padding: 0.75rem; border-radius: 0.5rem; }
+    #chat-results .result-item {
+      background: #eef2f7;
+      border-left: 5px solid #007bff;
+      padding: 10px;
+      border-radius: 5px;
+      margin-bottom: 10px;
+    }
+    #chat-results b {
+      color: #0056d6;
+    }
+    #chat-results p {
+      margin: 0;
+      color: #333;
+    }
+    #chat-input {
+      width: 100%;
+      margin-top: 8px;
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+    }
   </style>
 </head>
 <body>
-  <h1 class="text-center">🧠 Novacool RAG Control Console</h1>
+  <h1>🧠 Novacool RAG Control Console</h1>
+  <div class="container">
 
-  <div class="row g-4">
-    <!-- File Upload -->
-    <div class="col-md-4">
-      <h5 class="section-title">📁 Upload Files</h5>
-      <div class="console-card">
-        <input type="file" id="fileInput" class="form-control mb-3" multiple />
-        <button id="uploadBtn" class="btn btn-primary w-100 mb-3">Upload Files</button>
-        <h6 class="text-primary mt-3">Persistent Files:</h6>
-        <ul id="fileList" class="text-start list-unstyled small"></ul>
-      </div>
+    <!-- Upload Panel -->
+    <div class="panel" id="upload-panel">
+      <h3>📂 Upload Files</h3>
+      <input type="file" id="fileInput" multiple />
+      <button id="uploadBtn">Upload Files</button>
+      <div id="upload-status"></div>
+
+      <h4>Persistent Files:</h4>
+      <div id="fileList" class="file-list"></div>
     </div>
 
-    <!-- Crawler -->
-    <div class="col-md-4">
-      <h5 class="section-title">🕷️ Crawler Console</h5>
-      <div class="console-card">
-        <input type="text" id="crawlUrl" class="form-control mb-3" placeholder="https://novacool.com" />
-        <div class="d-flex gap-2 mb-3">
-          <button id="crawlStart" class="btn btn-success flex-fill">Start</button>
-          <button id="crawlPause" class="btn btn-warning flex-fill">Pause</button>
-          <button id="crawlStop" class="btn btn-danger flex-fill">Stop</button>
-        </div>
-        <button id="crawlClear" class="btn btn-secondary w-100 mb-3">Clear Logs</button>
-        <h6 class="text-primary">Logs:</h6>
-        <pre id="crawlLogs" class="small"></pre>
+    <!-- Crawler Panel -->
+    <div class="panel" id="crawler-panel">
+      <h3>🕷️ Crawler Console</h3>
+      <input type="text" id="crawlUrl" placeholder="https://novacool.com" />
+      <div>
+        <button id="startCrawl">Start</button>
+        <button id="pauseCrawl" style="background:#ffc107;">Pause</button>
+        <button id="stopCrawl" style="background:#dc3545;">Stop</button>
       </div>
+      <button id="clearLogs" style="background:#6c757d;">Clear Logs</button>
+      <h4>Logs:</h4>
+      <div id="crawlerLogs" class="log-box"></div>
     </div>
 
-    <!-- Chat -->
-    <div class="col-md-4">
-      <h5 class="section-title">💬 Chat / Query Engine</h5>
-      <div class="console-card">
-        <input type="text" id="chatQuery" class="form-control mb-3" placeholder="Ask something..." />
-        <button id="chatSendBtn" class="btn btn-info w-100 mb-3">Send Query</button>
-        <pre id="chatOutput" class="small"></pre>
-      </div>
+    <!-- Chat/Query Panel -->
+    <div class="panel" id="chat-panel">
+      <h3>💬 Chat / Query Engine</h3>
+      <input type="text" id="chat-input" placeholder="Ask something..." />
+      <button id="sendQuery" style="background:#00bcd4;">Send Query</button>
+      <div id="chat-results"></div>
     </div>
+
   </div>
 
-  <!-- Floating Chat Bubble -->
-  <div id="chat-bubble">💬</div>
+  <!-- Floating Bubble -->
+  <div id="chat-bubble" style="
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 60px;
+    height: 60px;
+    background-color: #007bff;
+    border-radius: 50%;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+    cursor: pointer;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 28px;">💬</div>
 
-  <div id="chat-window">
-    <div id="chat-header">Novacool Assistant</div>
-    <div id="chat-body"></div>
-    <div id="chat-input-area">
-      <input type="text" id="chat-input" placeholder="Ask me anything..." />
-      <button id="chat-send">Send</button>
-    </div>
-  </div>
+  <!-- Chat Window -->
+  <iframe id="chat-frame" src="/widget" style="
+    position: fixed;
+    bottom: 90px;
+    right: 20px;
+    width: 400px;
+    height: 550px;
+    border: none;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    display: none;
+    z-index: 9998;"></iframe>
 
   <script>
-    // ------------------ File Uploader ------------------
+    // Bubble toggle
+    const chatBubble = document.getElementById("chat-bubble");
+    const chatFrame = document.getElementById("chat-frame");
+    chatBubble.addEventListener("click", () => {
+      chatFrame.style.display = chatFrame.style.display === "none" ? "block" : "none";
+    });
+
+    const uploadBtn = document.getElementById("uploadBtn");
+    const fileInput = document.getElementById("fileInput");
+    const uploadStatus = document.getElementById("upload-status");
+    const fileList = document.getElementById("fileList");
+    const crawlerLogs = document.getElementById("crawlerLogs");
+    const crawlUrl = document.getElementById("crawlUrl");
+    const chatResults = document.getElementById("chat-results");
+
     async function refreshFileList() {
-      const res = await fetch('/check_uploads');
+      const res = await fetch("/check_uploads");
       const data = await res.json();
-      const list = document.getElementById('fileList');
-      list.innerHTML = '';
-      if (data.files) {
-        data.files.forEach(f => {
-          const li = document.createElement('li');
-          const a = document.createElement('a');
-          a.href = f;
-          a.textContent = f;
-          li.appendChild(a);
-          list.appendChild(li);
-        });
-      }
+      fileList.innerHTML = data.files
+        ? data.files.map(f => `<a href="${f}" target="_blank">${f}</a>`).join("")
+        : "No files uploaded.";
     }
 
-    document.getElementById('uploadBtn').addEventListener('click', async () => {
-      const files = document.getElementById('fileInput').files;
-      if (!files.length) return alert('Select a file first.');
+    uploadBtn.addEventListener("click", async () => {
+      const files = fileInput.files;
+      if (!files.length) return alert("Select at least one file.");
+
       for (const file of files) {
         const formData = new FormData();
-        formData.append('file', file);
-        await fetch('/upload', { method: 'POST', body: formData });
+        formData.append("file", file);
+
+        const res = await fetch("/upload", { method: "POST", body: formData });
+        const data = await res.json();
+
+        uploadStatus.innerHTML += data.error
+          ? `<div class='result-error'>❌ ${data.error}</div>`
+          : `<div class='result-success'>✅ ${data.message}</div>`;
       }
-      refreshFileList();
+
+      await refreshFileList();
+    });
+
+    // Crawler
+    document.getElementById("startCrawl").addEventListener("click", async () => {
+      const url = crawlUrl.value.trim();
+      if (!url) return alert("Enter a URL first.");
+      crawlerLogs.innerHTML += "Starting crawl...<br>";
+      const res = await fetch("/crawl", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      const data = await res.json();
+      crawlerLogs.innerHTML += `${data.message || data.error}<br>`;
+    });
+
+    document.getElementById("clearLogs").addEventListener("click", () => {
+      crawlerLogs.innerHTML = "";
+    });
+
+    // Chat / Query
+    document.getElementById("sendQuery").addEventListener("click", async () => {
+      const query = document.getElementById("chat-input").value.trim();
+      if (!query) return alert("Enter a query first.");
+
+      chatResults.innerHTML = "<div class='result-success'>Searching...</div>";
+      const res = await fetch("/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query }),
+      });
+
+      const data = await res.json();
+      if (data.results && data.results.length > 0) {
+        chatResults.innerHTML = data.results.map(r =>
+          `<div class='result-item'>
+            <b>📄 ${r.file || "Result"}:</b>
+            <p>${r.excerpt}</p>
+          </div>`
+        ).join("");
+      } else {
+        chatResults.innerHTML = `<div class='result-error'>${data.error || "No results found."}</div>`;
+      }
     });
 
     refreshFileList();
-
-    // ------------------ Crawler ------------------
-    const crawlLogs = document.getElementById('crawlLogs');
-    async function updateLogs() {
-      const res = await fetch('/crawl/logs');
-      const data = await res.json();
-      crawlLogs.textContent = data.logs || '';
-    }
-
-    document.getElementById('crawlStart').addEventListener('click', async () => {
-      const url = document.getElementById('crawlUrl').value.trim();
-      await fetch('/crawl', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
-      updateLogs();
-    });
-
-    document.getElementById('crawlPause').addEventListener('click', async () => {
-      await fetch('/crawl/pause', { method: 'POST' });
-      updateLogs();
-    });
-
-    document.getElementById('crawlStop').addEventListener('click', async () => {
-      await fetch('/crawl/stop', { method: 'POST' });
-      updateLogs();
-    });
-
-    document.getElementById('crawlClear').addEventListener('click', async () => {
-      await fetch('/crawl/clear', { method: 'POST' });
-      updateLogs();
-    });
-
-    setInterval(updateLogs, 3000);
-
-    // ------------------ Chat Engine ------------------
-    document.getElementById('chatSendBtn').addEventListener('click', async () => {
-      const query = document.getElementById('chatQuery').value.trim();
-      if (!query) return alert('Enter a query');
-      const res = await fetch('/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query }) });
-      const data = await res.json();
-      document.getElementById('chatOutput').textContent = data.message || JSON.stringify(data);
-    });
-
-    // ------------------ Floating Chat Bubble ------------------
-    const bubble = document.getElementById('chat-bubble');
-    const chatWindow = document.getElementById('chat-window');
-    const chatBody = document.getElementById('chat-body');
-    const chatInput = document.getElementById('chat-input');
-    const sendBtn = document.getElementById('chat-send');
-
-    bubble.addEventListener('click', () => {
-      chatWindow.style.display = chatWindow.style.display === 'none' ? 'block' : 'none';
-      if (chatWindow.style.display === 'block' && chatBody.innerHTML.trim() === '')
-        appendMessage('Assistant', 'Hi Casey — Novacool RAG Assistant is ready!');
-    });
-
-    sendBtn.addEventListener('click', sendMessage);
-    chatInput.addEventListener('keypress', e => { if (e.key === 'Enter') sendMessage(); });
-
-    async function sendMessage() {
-      const msg = chatInput.value.trim();
-      if (!msg) return;
-      appendMessage('You', msg);
-      chatInput.value = '';
-      try {
-        const res = await fetch('/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query: msg })
-        });
-        const data = await res.json();
-        appendMessage('Assistant', data.message || JSON.stringify(data));
-      } catch {
-        appendMessage('Assistant', '⚠️ Connection error.');
-      }
-    }
-
-    function appendMessage(sender, text) {
-      const div = document.createElement('div');
-      div.innerHTML = `<strong>${sender}:</strong> ${text}`;
-      chatBody.appendChild(div);
-      chatBody.scrollTop = chatBody.scrollHeight;
-    }
   </script>
 </body>
 </html>
