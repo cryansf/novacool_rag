@@ -66,11 +66,12 @@
     const chatBody = document.getElementById("chat-body");
     const input = document.getElementById("chat-input");
     const sendBtn = document.getElementById("send-btn");
+    const API_URL = "https://novacool-rag.onrender.com/chat"; // 🔹 Explicit backend URL
 
     function appendMessage(role, text) {
       const msg = document.createElement("div");
       msg.classList.add("msg", role === "user" ? "user" : "bot");
-      msg.textContent = text;
+      msg.innerHTML = text.replace(/\n/g, "<br>");
       chatBody.appendChild(msg);
       chatBody.scrollTop = chatBody.scrollHeight;
     }
@@ -81,16 +82,30 @@
       appendMessage("user", query);
       input.value = "";
 
-      const res = await fetch("/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query }),
-      });
-      const data = await res.json();
-      if (data.results && data.results.length > 0) {
-        appendMessage("bot", data.results.map(r => r.text).join("\n\n"));
-      } else {
-        appendMessage("bot", data.error || "No results found.");
+      appendMessage("bot", "Thinking... 🔍");
+
+      try {
+        const res = await fetch(API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query }),
+        });
+
+        const data = await res.json();
+        chatBody.lastChild.remove(); // remove "Thinking..."
+        
+        if (data.results && data.results.length > 0) {
+          let html = "";
+          data.results.forEach((r) => {
+            html += `<b>📄 ${r.file || "Result"}:</b><br>${r.excerpt}<br><br>`;
+          });
+          appendMessage("bot", html);
+        } else {
+          appendMessage("bot", data.error || "No results found.");
+        }
+      } catch (err) {
+        appendMessage("bot", "⚠️ Connection error. Please try again.");
+        console.error(err);
       }
     };
 
