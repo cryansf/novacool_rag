@@ -1,27 +1,33 @@
-# --- Core Framework ---
-Flask==3.0.3
-Werkzeug==3.0.3
-
-# --- Web Parsing & Crawling ---
-requests==2.32.3
-beautifulsoup4==4.12.3
-lxml==5.3.0
-PyPDF2==3.0.1
-python-docx==1.1.0
-
-# --- Vector Store / RAG ---
-langchain==0.3.5
-langchain-community==0.3.3
-langchain-openai==0.2.2
-faiss-cpu==1.9.0.post1
-tiktoken==0.7.0
-
-# --- Data Handling & Utilities ---
-numpy==1.26.4
-pandas==2.2.2
+# === Core Web Server ===
+flask==3.0.3
 flask-cors==4.0.0
+gunicorn==22.0.0
 
+# === OpenAI + Embedding Pipeline ===
+openai>=1.12.0
+tiktoken>=0.7.0
+sentence-transformers>=3.0.0
 
-# --- Optional but recommended ---
-python-dotenv==1.0.1     # for local environment management
-gunicorn==22.0.0         # for Render production deployment
+# === Vector Database ===
+faiss-cpu>=1.8.0
+numpy>=1.26.0
+pandas>=2.2.0
+
+# === Web Crawling & Text Extraction ===
+beautifulsoup4>=4.12.2
+requests>=2.31.0
+html2text>=2020.1.16
+
+# === Optional utilities ===
+python-dotenv>=1.0.1
+urllib3>=2.0.7
+
+# === Notes ===
+# - Flask: serves API endpoints (/chat, /upload, /reindex, /health)
+# - sentence-transformers: creates embeddings for PDF/DOCX text
+# - faiss-cpu: stores and retrieves vectors for RAG search
+# - flask-cors: allows Bubble frontend to call the API
+# - gunicorn: required for Render deployment
+# - html2text & bs4: used in crawler_controller.py to extract website text
+# - tiktoken: token counting for OpenAI input truncation
+# - python-dotenv: loads .env with your API key and settings
