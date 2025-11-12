@@ -1,93 +1,136 @@
+"""
+rag_pipeline.py — Lightweight FAISS + SentenceTransformer pipeline
+for Novacool RAG.  Optimized for low-memory Render environments.
+"""
+
 import os
-import json
 import faiss
 import numpy as np
 from sentence_transformers import SentenceTransformer
+from PyPDF2 import PdfReader
+from docx import Document
 
-# -------------------------------------------------------------------
-# Persistent paths
-# -------------------------------------------------------------------
-DATA_DIR = "/data/vector_store"
+# === Globals ===
+DATA_DIR = os.path.join(os.getcwd(), "data")
+INDEX_FILE = os.path.join(DATA_DIR, "faiss.index")
+TEXT_STORE = os.path.join(DATA_DIR, "texts.npy")
 os.makedirs(DATA_DIR, exist_ok=True)
 
-EMBED_FILE = os.path.join(DATA_DIR, "embeddings.npy")
-META_FILE = os.path.join(DATA_DIR, "metadata.json")
-INDEX_FILE = os.path.join(DATA_DIR, "faiss.index")
-
-# Load or initialize global model and data
-model = SentenceTransformer("all-MiniLM-L6-v2")
-embeddings = None
-metadata = []
-index = None
+_model = None
+_index = None
+_texts = []
 
 
-# -------------------------------------------------------------------
-# Load or initialize FAISS index
-# -------------------------------------------------------------------
-def load_index():
-    global embeddings, metadata, index
+# === Lazy loaders ===
 
-    if os.path.exists(EMBED_FILE) and os.path.exists(META_FILE) and os.path.exists(INDEX_FILE):
-        print("[RAG] Loading existing FAISS index...")
-        embeddings = np.load(EMBED_FILE)
-        with open(META_FILE, "r", encoding="utf-8") as f:
-            metadata.extend(json.load(f))
-        index = faiss.read_index(INDEX_FILE)
+def get_model():
+    """Load the SentenceTransformer model lazily."""
+    global _model
+    if _model is None:
+        print("[RAG] Loading embedding model (all-MiniLM-L6-v2)...")
+        _model = SentenceTransformer("all-MiniLM-L6-v2")
+    return _model
+
+
+def get_index():
+    """Load or create FAISS index lazily."""
+    global _index
+    if _index is None:
+        if os.path.exists(INDEX_FILE):
+            print("[RAG] Loading existing FAISS index...")
+            _index = faiss.read_index(INDEX_FILE)
+        else:
+            print("[RAG] Creating new FAISS index...")
+            _index = faiss.IndexFlatL2(384)
+    return _index
+
+
+# === Utility: extract text ===
+
+def extract_text(path):
+    """Extract text from PDF or DOCX."""
+    text = ""
+    if path.lower().endswith(".pdf"):
+        reader = PdfReader(path)
+        for page in reader.pages:
+            text += page.extract_text() or ""
+    elif path.lower().endswith(".docx"):
+        doc = Document(path)
+        for p in doc.paragraphs:
+            text += p.text + "\n"
     else:
-        print("[RAG] Creating new FAISS index...")
-        index = faiss.IndexFlatL2(384)  # embedding size for MiniLM
-        embeddings = np.empty((0, 384), dtype="float32")
+        with open(path, "r", encoding="utf-8", errors="ignore") as f:
+            text = f.read()
+    return text.strip()
 
 
-# Initialize index on import
-load_index()
+# === Ingest documents ===
 
+def ingest_text(files):
+    """Embed and store new documents."""
+    model = get_model()
+    index = get_index()
+    global _texts
 
-# -------------------------------------------------------------------
-# Ingest Text into RAG Store
-# -------------------------------------------------------------------
-def ingest_text(text, source="manual"):
-    """Convert text to embeddings and store persistently."""
-    global embeddings, metadata, index
+    new_embeddings = []
+    for f in files:
+        content = extract_text(f)
+        if not content:
+            continue
+        emb = model.encode([content])[0].astype("float32")
+        new_embeddings.append(emb)
+        _texts.append(content)
 
-    if not text.strip():
-        return "No text provided for ingestion."
+    if not new_embeddings:
+        return {"status": "no new text extracted"}
 
-    vector = model.encode([text])
-    index.add(vector.astype("float32"))
+    embs = np.vstack(new_embeddings)
+    index.add(embs)
 
-    # Update metadata
-    metadata.append({"source": source, "text": text[:500]})
-    embeddings = np.vstack([embeddings, vector])
-
-    # Save everything
-    np.save(EMBED_FILE, embeddings)
-    with open(META_FILE, "w", encoding="utf-8") as f:
-        json.dump(metadata, f, indent=2)
+    # Persist data
     faiss.write_index(index, INDEX_FILE)
+    np.save(TEXT_STORE, np.array(_texts, dtype=object))
+    print(f"[RAG] Added {len(new_embeddings)} document(s) to FAISS index.")
 
-    print(f"[RAG] Ingested text from: {source}")
-    return f"Ingested {len(text)} characters from {source}"
+    return {"indexed_docs": len(new_embeddings)}
 
 
-# -------------------------------------------------------------------
-# Query Text (semantic search)
-# -------------------------------------------------------------------
-def query_text(query, top_k=3):
-    """Perform a semantic search against the FAISS index."""
-    if index is None or index.ntotal == 0:
-        return [{"text": "No documents have been indexed yet."}]
+# === Query documents ===
 
-    query_vec = model.encode([query]).astype("float32")
-    D, I = index.search(query_vec, top_k)
+def query_text(query, top_k: int = 3):
+    """Return the most relevant text chunks for a query."""
+    model = get_model()
+    index = get_index()
+    global _texts
 
-    results = []
-    for i in range(len(I[0])):
-        idx = I[0][i]
-        if idx < len(metadata):
-            results.append({
-                "text": metadata[idx]["text"],
-                "source": metadata[idx]["source"],
-                "score": float(D[0][i])
-            })
-    return results
+    if os.path.exists(TEXT_STORE):
+        _texts = np.load(TEXT_STORE, allow_pickle=True).tolist()
+
+    if not _texts or index.ntotal == 0:
+        return "Knowledge base is empty. Please upload documents first."
+
+    q_emb = model.encode([query]).astype("float32")
+    D, I = index.search(q_emb, top_k)
+
+    results = [f"{_texts[i][:500]}..." for i in I[0] if i < len(_texts)]
+    if not results:
+        return "No relevant results found."
+
+    return "\n\n---\n\n".join(results)
+
+
+# === Optional: manual rebuild ===
+
+def rebuild_index():
+    """Recreate index from saved texts if index file is missing."""
+    global _texts, _index
+    model = get_model()
+    if os.path.exists(TEXT_STORE):
+        _texts = np.load(TEXT_STORE, allow_pickle=True).tolist()
+        embs = model.encode(_texts).astype("float32")
+        _index = faiss.IndexFlatL2(embs.shape[1])
+        _index.add(embs)
+        faiss.write_index(_index, INDEX_FILE)
+        print(f"[RAG] Rebuilt FAISS index with {len(_texts)} docs.")
+    else:
+        print("[RAG] No stored texts found to rebuild index.")
