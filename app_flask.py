@@ -1,93 +1,105 @@
 import os
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
+from dotenv import load_dotenv
 
-# === Import your internal RAG modules ===
-from rag_pipeline import ingest_text, query_text  # FAISS + Embeddings
-from crawler_controller import crawl_and_ingest   # Web crawler
-from ingest import ingest_files                   # File upload handler
+# === Local imports ===
+from rag_pipeline import ingest_text, query_text  # your embedding and retrieval logic
+from crawler_controller import crawl_and_ingest   # autonomous crawler function
 
-# === Flask app setup ===
+# === Load environment variables ===
+load_dotenv()
+
+# === Initialize app ===
 app = Flask(__name__)
 CORS(app)
 
-# === ROUTE: Homepage (Control Console UI) ===
-@app.route("/")
-def index():
-    return render_template("index.html")
+# === Health Check Route (root) ===
+@app.route("/", methods=["GET"])
+def home():
+    """Basic health check endpoint for Render."""
+    return jsonify({
+        "status": "ok",
+        "message": "Novacool RAG API is live!"
+    }), 200
 
-# === ROUTE: File Upload + Ingestion ===
+
+# === File Upload + Ingestion Route ===
 @app.route("/upload", methods=["POST"])
-def upload():
-    """Handles file uploads and ingestion into FAISS index."""
+def upload_files():
+    """
+    Uploads PDF/DOCX files, stores them in /uploads, and indexes into FAISS.
+    """
     try:
         if "files" not in request.files:
             return jsonify({"error": "No files in request."}), 400
 
-        uploaded_files = request.files.getlist("files")
-        if not uploaded_files:
-            return jsonify({"error": "No files selected."}), 400
+        files = request.files.getlist("files")
+        if not files:
+            return jsonify({"error": "Empty upload request."}), 400
 
-        saved_paths = []
-        for f in uploaded_files:
+        os.makedirs("uploads", exist_ok=True)
+        uploaded = []
+
+        for f in files:
             save_path = os.path.join("uploads", f.filename)
             f.save(save_path)
-            saved_paths.append(save_path)
+            uploaded.append(save_path)
 
-        # Ingest and embed the files
-        stats = ingest_files(saved_paths)
+        # Call your ingestion pipeline
+        for path in uploaded:
+            ingest_text(path)
+
         return jsonify({
-            "message": "Files uploaded and ingested successfully.",
-            "stats": stats
+            "status": "success",
+            "files": uploaded,
+            "message": "Files uploaded and indexed successfully."
         }), 200
 
     except Exception as e:
         print("[Upload Error]", e)
         return jsonify({"error": str(e)}), 500
 
-# === ROUTE: Web Crawler ===
+
+# === Chat / Query Route ===
+@app.route("/chat", methods=["POST"])
+def chat():
+    """
+    Handles user queries using FAISS + OpenAI semantic search pipeline.
+    """
+    try:
+        data = request.get_json()
+        query = data.get("query", "").strip()
+
+        if not query:
+            return jsonify({"error": "Query is empty."}), 400
+
+        # Run the retrieval and answer generation
+        answer = query_text(query)
+        return jsonify({"answer": answer}), 200
+
+    except Exception as e:
+        print("[Chat Error]", e)
+        return jsonify({"error": str(e)}), 500
+
+
+# === Autonomous Web Crawl Route ===
 @app.route("/crawl", methods=["POST"])
 def crawl():
-    """Triggers autonomous crawling + ingestion."""
+    """
+    Triggers a background crawl and auto-ingestion of web pages.
+    """
     try:
         data = request.get_json()
         url = data.get("url", "").strip()
-
         if not url:
-            return jsonify({"error": "Missing URL"}), 400
+            return jsonify({"error": "No URL provided."}), 400
 
-        result = crawl_and_ingest(url)
-        return jsonify({"message": "Crawl complete", "result": result}), 200
+        crawl_and_ingest(url)
+        return jsonify({"status": "success", "url": url}), 200
 
     except Exception as e:
-        print("[Crawler Error]", e)
-        return jsonify({"error": str(e)}), 500
-
-# === ROUTE: Chat / Semantic Query ===
-@app.route("/chat", methods=["POST"])
-def chat():
-    """Handles semantic search / question answering queries."""
-    data = request.get_json()
-
-    # --- Validate input ---
-    if not data or "query" not in data:
-        return jsonify({"error": "Missing query field."}), 400
-
-    query = data["query"].strip()
-    if not query:
-        return jsonify({"error": "Query is empty."}), 400
-
-    # --- Run the query ---
-    try:
-        # Use your RAG pipeline to get an answer from FAISS + embeddings
-        answer = query_text(query)
-
-        # Send a clean JSON response back to the front-end
-        return jsonify({"response": answer}), 200
-
-    # --- Handle errors cleanly ---
-    except Exception as e:
-        print("[Chat Error]", e)
+        print("[Crawl Error]", e)
         return jsonify({"error": str(e)}), 500
 
 
