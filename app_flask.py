@@ -1,144 +1,97 @@
-# app_flask.py
 import os
-import json
-from flask import Flask, request, jsonify, render_template, send_from_directory
-from werkzeug.utils import secure_filename
-from rag_pipeline import ingest_text, query_text  # your existing RAG utilities
-from crawler_engine import crawl_and_ingest       # NEW autonomous crawler
+from flask import Flask, request, jsonify, render_template
+from flask_cors import CORS
 
+# === Import your internal RAG modules ===
+from rag_pipeline import ingest_text, query_text  # FAISS + Embeddings
+from crawler_controller import crawl_and_ingest   # Web crawler
+from ingest import ingest_files                   # File upload handler
+
+# === Flask app setup ===
 app = Flask(__name__)
+CORS(app)
 
-# Persistent upload directory
-UPLOAD_DIR = "/data/uploads"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-
-# --------------------------------------------------------------------
-# BASIC ROUTES
-# --------------------------------------------------------------------
+# === ROUTE: Homepage (Control Console UI) ===
 @app.route("/")
-def uploader_page():
-    """Main RAG Control Console (Uploader, Crawler, Chat Panels)."""
-    return render_template("uploader.html")
+def index():
+    return render_template("index.html")
 
-
-@app.route("/widget")
-def chat_widget():
-    """Embeddable iframe widget for external sites (e.g. GetResponse)."""
-    return render_template("widget.html")
-
-
-@app.route("/health")
-def health_check():
-    return jsonify({"status": "ok"})
-
-
-# --------------------------------------------------------------------
-# FILE UPLOAD / MANAGEMENT
-# --------------------------------------------------------------------
+# === ROUTE: File Upload + Ingestion ===
 @app.route("/upload", methods=["POST"])
-def upload_file():
-    """Handles manual PDF/DOCX upload and ingestion."""
-    if "file" not in request.files:
-        return jsonify({"error": "No file part"}), 400
-
-    file = request.files["file"]
-    if file.filename == "":
-        return jsonify({"error": "No selected file"}), 400
-
-    filename = secure_filename(file.filename)
-    save_path = os.path.join(UPLOAD_DIR, filename)
-    file.save(save_path)
-
-    # Ingest immediately into the RAG index
+def upload():
+    """Handles file uploads and ingestion into FAISS index."""
     try:
-        result = ingest_text(save_path)
-        message = f"File '{filename}' uploaded and indexed successfully."
-        return jsonify({"message": message, "result": result})
+        if "files" not in request.files:
+            return jsonify({"error": "No files in request."}), 400
+
+        uploaded_files = request.files.getlist("files")
+        if not uploaded_files:
+            return jsonify({"error": "No files selected."}), 400
+
+        saved_paths = []
+        for f in uploaded_files:
+            save_path = os.path.join("uploads", f.filename)
+            f.save(save_path)
+            saved_paths.append(save_path)
+
+        # Ingest and embed the files
+        stats = ingest_files(saved_paths)
+        return jsonify({
+            "message": "Files uploaded and ingested successfully.",
+            "stats": stats
+        }), 200
+
     except Exception as e:
+        print("[Upload Error]", e)
         return jsonify({"error": str(e)}), 500
 
-
-@app.route("/uploads/<path:filename>")
-def get_uploaded_file(filename):
-    """Serve uploaded file directly from persistent storage."""
-    return send_from_directory(UPLOAD_DIR, filename)
-
-
-@app.route("/check_uploads")
-def check_uploads():
-    """Returns list of uploaded files."""
-    files = sorted(os.listdir(UPLOAD_DIR))
-    file_urls = [f"/uploads/{f}" for f in files]
-    return jsonify({"files": file_urls})
-
-
-# --------------------------------------------------------------------
-# AUTONOMOUS CRAWLER
-# --------------------------------------------------------------------
+# === ROUTE: Web Crawler ===
 @app.route("/crawl", methods=["POST"])
 def crawl():
-    """Autonomous crawler that finds and indexes linked PDFs/DOCX from a URL."""
-    data = request.get_json()
-    base_url = data.get("url")
-    if not base_url:
-        return jsonify({"error": "Missing URL."}), 400
-
+    """Triggers autonomous crawling + ingestion."""
     try:
-        logs = crawl_and_ingest(base_url)
-        return jsonify({"message": "Crawl complete", "logs": logs})
+        data = request.get_json()
+        url = data.get("url", "").strip()
+
+        if not url:
+            return jsonify({"error": "Missing URL"}), 400
+
+        result = crawl_and_ingest(url)
+        return jsonify({"message": "Crawl complete", "result": result}), 200
+
     except Exception as e:
+        print("[Crawler Error]", e)
         return jsonify({"error": str(e)}), 500
 
-
-# --------------------------------------------------------------------
-# CHAT / QUERY ENDPOINT
-# --------------------------------------------------------------------
+# === ROUTE: Chat / Semantic Query ===
 @app.route("/chat", methods=["POST"])
 def chat():
     """Handles semantic search / question answering queries."""
     data = request.get_json()
-    query = data.get("query", "").strip()
 
+    # --- Validate input ---
+    if not data or "query" not in data:
+        return jsonify({"error": "Missing query field."}), 400
+
+    query = data["query"].strip()
     if not query:
         return jsonify({"error": "Query is empty."}), 400
 
+    # --- Run the query ---
     try:
-        results = query_text(query)  # returns list of (filename, excerpt, score)
-        if not results:
-            return jsonify({"message": "No matches found.", "results": []})
+        # Use your RAG pipeline to get an answer from FAISS + embeddings
+        answer = query_text(query)
 
-        formatted = []
-        for r in results:
-            # RAG pipeline returns (filename, excerpt, score)
-            formatted.append({
-                "file": os.path.basename(r[0]),
-                "excerpt": r[1][:500] + ("..." if len(r[1]) > 500 else "")
-            })
+        # Send a clean JSON response back to the front-end
+        return jsonify({"response": answer}), 200
 
-        return jsonify({
-            "message": f"Found {len(formatted)} matching items.",
-            "query": query,
-            "results": formatted
-        })
-
+    # --- Handle errors cleanly ---
     except Exception as e:
-        return jsonify({"error": f"Chat engine failed: {e}"}), 500
+        print("[Chat Error]", e)
+        return jsonify({"error": str(e)}), 500
 
 
-# --------------------------------------------------------------------
-# DEBUG ROUTE
-# --------------------------------------------------------------------
-@app.route("/debug")
-def debug_route():
-    """For quick Render verification — lists routes."""
-    return jsonify({
-        "routes": [str(r) for r in app.url_map.iter_rules()],
-        "uploads": os.listdir(UPLOAD_DIR)
-    })
-
-
-# --------------------------------------------------------------------
-# MAIN ENTRY
-# --------------------------------------------------------------------
+# === MAIN ENTRYPOINT ===
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    import os
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
