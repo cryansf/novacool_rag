@@ -1,115 +1,56 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Novacool Chat Assistant</title>
   <style>
-    body {
-      margin: 0;
-      font-family: system-ui, sans-serif;
-      background: #f4f7fb;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-    }
-    .chat-box {
-      width: 400px;
-      height: 500px;
-      background: white;
-      display: flex;
-      flex-direction: column;
-      border-radius: 12px;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.2);
-      overflow: hidden;
-    }
-    .header {
-      background: #0052a3;
-      color: white;
-      padding: 12px;
-      font-size: 1.1em;
-      text-align: center;
-      font-weight: 600;
-    }
-    .messages {
-      flex: 1;
-      padding: 12px;
-      overflow-y: auto;
-    }
-    .msg {
-      margin-bottom: 10px;
-      padding: 10px;
-      border-radius: 8px;
-      max-width: 80%;
-      line-height: 1.4;
-    }
-    .bot { background: #e9eff6; align-self: flex-start; }
-    .user { background: #0066cc; color: white; align-self: flex-end; }
-    .input-area {
-      display: flex;
-      padding: 8px;
-      border-top: 1px solid #ddd;
-    }
-    input {
-      flex: 1;
-      padding: 8px;
-      border: 1px solid #ccc;
-      border-radius: 6px;
-    }
-    button {
-      background: #0066cc;
-      color: white;
-      border: none;
-      border-radius: 6px;
-      padding: 8px 12px;
-      margin-left: 6px;
-      cursor: pointer;
-    }
+    body{margin:0;background:#0b0b0d;color:#fff;font-family:Inter,Arial,sans-serif;display:flex;flex-direction:column;height:100vh}
+    header{display:flex;align-items:center;gap:10px;padding:12px;background:#131316;border-bottom:1px solid #222}
+    header img{height:40px}
+    header h1{font-size:20px;margin:0;color:#ff445a}
+    #log{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:12px;background:linear-gradient(180deg,#101014,#0b0b0d)}
+    .msg{max-width:80%;padding:12px 14px;border-radius:12px;line-height:1.5}
+    .you{align-self:flex-end;background:#1d1d21}
+    .bot{align-self:flex-start;background:#141418}
+    form{display:flex;gap:8px;padding:14px;border-top:1px solid #222;background:#0d0d10}
+    input{flex:1;padding:12px;border-radius:8px;background:#0b0b0e;color:#fff;border:1px solid #333}
+    button{padding:12px 16px;background:#e11d2e;color:#fff;font-weight:bold;border:none;border-radius:8px;cursor:pointer}
+    button:hover{background:#ff445a}
   </style>
 </head>
 <body>
-  <div class="chat-box">
-    <div class="header">Novacool Chat Assistant</div>
-    <div class="messages" id="messages"></div>
-    <div class="input-area">
-      <input id="userInput" type="text" placeholder="Ask me about Novacool..." />
-      <button onclick="send()">Send</button>
+  <header>
+    <img src="https://swfirefightingfoam.com/images/logo1-web.png" alt="Novacool Logo"/>
+    <div>
+      <h1>Novacool AI Assistant</h1>
+      <small>Ask about UEF mix rates, certifications, environmental data & more</small>
     </div>
-  </div>
-
+  </header>
+  <div id="log"></div>
+  <form id="chat">
+    <input id="q" type="text" placeholder="Ask a question..." autocomplete="off"/>
+    <button type="submit">Send</button>
+  </form>
   <script>
-    const msgs = document.getElementById("messages");
-    const input = document.getElementById("userInput");
-
-    function addMsg(text, cls) {
-      const d = document.createElement("div");
-      d.className = "msg " + cls;
-      d.textContent = text;
-      msgs.appendChild(d);
-      msgs.scrollTop = msgs.scrollHeight;
+    const log = document.getElementById('log');
+    const form = document.getElementById('chat');
+    const q = document.getElementById('q');
+    function add(role, html){
+      const d=document.createElement('div');
+      d.className='msg '+(role==='you'?'you':'bot');
+      d.innerHTML=html.replace(/\n/g,'<br/>');
+      log.appendChild(d); log.scrollTop=log.scrollHeight;
     }
-
-    async function send() {
-      const message = input.value.trim();
-      if (!message) return;
-      addMsg(message, "user");
-      input.value = "";
-      try {
-        const res = await fetch("/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message })
-        });
-        const data = await res.json();
-        addMsg(data.reply || data.error || "No response", "bot");
-      } catch (e) {
-        addMsg("Error: " + e.message, "bot");
-      }
-    }
-
-    input.addEventListener("keypress", e => {
-      if (e.key === "Enter") send();
+    form.addEventListener('submit', async(e)=>{
+      e.preventDefault();
+      const text=q.value.trim(); if(!text)return;
+      add('you',text); q.value=''; const hold=add('bot','Thinking...');
+      try{
+        const r=await fetch('/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:text})});
+        const data=await r.json();
+        hold.innerHTML=data.answer?data.answer.replace(/\n/g,'<br/>'):'No answer';
+      }catch(err){hold.innerHTML='Error: '+err;}
     });
   </script>
 </body>
