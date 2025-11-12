@@ -1,37 +1,36 @@
+# app_flask.py
 from flask import Flask, render_template, request, jsonify, send_from_directory
 from flask_cors import CORS
 import os
+
+# Local imports
 from crawler_controller import crawl_and_ingest
 from rag_pipeline import ingest_text, search_docs
 
-# -----------------------------------------------------------------------------
-# Flask App Setup
-# -----------------------------------------------------------------------------
 app = Flask(__name__)
 CORS(app)
 
-# Persistent storage folder (Render's /data is preserved across deploys)
+# Persistent storage path (Render's /data is persistent)
 UPLOAD_FOLDER = "/data/uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# -----------------------------------------------------------------------------
-# Root - Uploader Dashboard Page
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------
+# ROOT: Main control console (Uploader + Crawler + Chat)
+# ---------------------------------------------------------------------
 @app.route("/", methods=["GET"])
-def uploader_page():
-    """Serve the main dashboard with uploader + crawler + chat bubble."""
+def index():
     return render_template("uploader.html")
 
-# -----------------------------------------------------------------------------
-# Health Check
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------
+# HEALTH CHECK
+# ---------------------------------------------------------------------
 @app.route("/health", methods=["GET"])
 def health_check():
-    return jsonify({"status": "ok"})
+    return jsonify({"status": "ok"}), 200
 
-# -----------------------------------------------------------------------------
-# Upload File
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------
+# FILE UPLOAD
+# ---------------------------------------------------------------------
 @app.route("/upload", methods=["POST"])
 def upload_file():
     """Upload and persist files into /data/uploads directory."""
@@ -45,27 +44,29 @@ def upload_file():
     try:
         save_path = os.path.join(UPLOAD_FOLDER, file.filename)
         file.save(save_path)
+
+        # Optional: auto-ingest text from PDF/DOCX after upload
+        ingest_text(save_path)
+
         return jsonify({
-            "message": f"✅ File '{file.filename}' saved successfully.",
+            "message": f"File '{file.filename}' uploaded and indexed.",
             "path": f"/uploads/{file.filename}"
         }), 200
     except Exception as e:
-        return jsonify({"error": f"Failed to save file: {e}"}), 500
+        return jsonify({"error": f"Upload failed: {e}"}), 500
 
-# -----------------------------------------------------------------------------
-# Serve Uploaded Files
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------
+# SERVE UPLOADED FILES
+# ---------------------------------------------------------------------
 @app.route("/uploads/<path:filename>", methods=["GET"])
 def get_uploaded_file(filename):
-    """Allow access to previously uploaded files."""
     return send_from_directory(UPLOAD_FOLDER, filename)
 
-# -----------------------------------------------------------------------------
-# List All Uploaded Files
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------
+# LIST UPLOADED FILES
+# ---------------------------------------------------------------------
 @app.route("/check_uploads", methods=["GET"])
 def check_uploads():
-    """List all files currently stored in /data/uploads."""
     try:
         files = os.listdir(UPLOAD_FOLDER)
         file_urls = [f"/uploads/{name}" for name in files]
@@ -73,84 +74,53 @@ def check_uploads():
     except Exception as e:
         return jsonify({"error": f"Unable to list uploads: {e}"}), 500
 
-# -----------------------------------------------------------------------------
-# Crawl and Ingest Endpoint
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------
+# CRAWLER: crawl and ingest
+# ---------------------------------------------------------------------
 @app.route("/crawl", methods=["POST"])
 def crawl_route():
-    """Crawl a webpage and ingest its text into the RAG pipeline."""
     data = request.get_json()
     url = data.get("url") if data else None
-
     if not url:
         return jsonify({"error": "Missing 'url' in request body"}), 400
 
     try:
         result = crawl_and_ingest(url)
-        return jsonify({"message": result})
+        return jsonify({"message": result}), 200
     except Exception as e:
-        return jsonify({"error": f"Crawl failed: {e}"}), 500
+        return jsonify({"error": f"Crawler failed: {e}"}), 500
 
-# -----------------------------------------------------------------------------
-# Chat / Query Endpoint
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------
+# CHAT ENDPOINT
+# ---------------------------------------------------------------------
 @app.route("/chat", methods=["POST"])
 def chat():
-    """
-    Accept JSON: {"query": "<user question>"}
-    Performs semantic search (or returns placeholder response).
-    """
+    """Perform semantic search and respond from indexed data."""
     data = request.get_json()
-    query = data.get("query", "").strip() if data else ""
-
+    query = data.get("query", "").strip()
     if not query:
-        return jsonify({"error": "Query cannot be empty"}), 400
+        return jsonify({"error": "Empty query"}), 400
 
     try:
-        # ✅ Real RAG search pipeline
         results = search_docs(query)
-        if not results:
-            return jsonify({"message": "No relevant documents found."})
         return jsonify({
+            "message": f"Found {len(results)} matching items.",
             "query": query,
-            "results": results,
-            "message": f"Found {len(results)} matching items."
+            "results": results
         })
     except Exception as e:
-        # ✅ Fallback placeholder if RAG isn’t active
-        print(f"[Chat Error] {e}")
-        return jsonify({
-            "message": f"🤖 I’m online! You asked: '{query}'. (RAG response engine temporarily unavailable.)"
-        })
+        return jsonify({"error": f"Search failed: {e}"}), 500
 
-# -----------------------------------------------------------------------------
-# Widget Chat Route (for GetResponse Bubble Embed)
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------
+# WIDGET: embedded mini-chat (for GetResponse)
+# ---------------------------------------------------------------------
 @app.route("/widget", methods=["GET"])
 def widget():
-    """Serve minimal chat-only widget for GetResponse iframe embed."""
     return render_template("widget.html")
 
-# -----------------------------------------------------------------------------
-# Debug Endpoint (optional)
-# -----------------------------------------------------------------------------
-@app.route("/debug", methods=["GET"])
-def debug_info():
-    """Show diagnostic info (for testing only)."""
-    try:
-        files = os.listdir(UPLOAD_FOLDER)
-    except Exception:
-        files = []
-    return jsonify({
-        "status": "running",
-        "upload_folder": UPLOAD_FOLDER,
-        "file_count": len(files),
-        "routes": [str(r) for r in app.url_map.iter_rules()]
-    })
-
-# -----------------------------------------------------------------------------
-# Main Entry
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------
+# MAIN ENTRY
+# ---------------------------------------------------------------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port, debug=True)

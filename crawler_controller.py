@@ -1,24 +1,23 @@
+# crawler_controller.py
 import requests
 from bs4 import BeautifulSoup
 from rag_pipeline import ingest_text
+import tempfile
+import os
 
 def crawl_and_ingest(url):
-    """
-    Crawl a single web page, extract readable text, and ingest it into the RAG vector database.
-    This version is independent of Flask (no circular imports).
-    """
-    print(f"[Crawler] Starting crawl for: {url}")
+    """Crawl a URL, extract text, and ingest to FAISS."""
     try:
-        response = requests.get(url, timeout=15)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, 'html.parser')
+        res = requests.get(url, timeout=10)
+        res.raise_for_status()
+        soup = BeautifulSoup(res.text, "html.parser")
+        text = soup.get_text(separator="\n", strip=True)
 
-        # Extract text and clean it up
-        text = soup.get_text(separator='\n', strip=True)
+        tmp_path = os.path.join(tempfile.gettempdir(), "crawl_text.txt")
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            f.write(text)
 
-        # Send to your RAG ingestion pipeline
-        ingest_text(text)
-
-        print(f"[Crawler] Successfully crawled and ingested: {url}")
+        ingest_text(tmp_path)
+        return f"Crawl and ingestion complete for {url}"
     except Exception as e:
-        print(f"[Crawler] Error while crawling {url}: {e}")
+        return f"Error crawling {url}: {e}"
