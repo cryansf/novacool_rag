@@ -1,364 +1,273 @@
 import os
-import re
 import json
+import uuid
+import shutil
 import requests
+from flask import Flask, request, jsonify, send_from_directory
+from flask_cors import CORS
+from werkzeug.utils import secure_filename
+
+# --- Embeddings & FAISS ---
+import faiss
 import numpy as np
+from sentence_transformers import SentenceTransformer
 
-from flask import (
-    Flask,
-    request,
-    jsonify,
-    render_template,
-    send_from_directory,
-)
+# --- Text extraction ---
+import html2text
 from bs4 import BeautifulSoup
-from docx import Document
-from PyPDF2 import PdfReader
 
-# === Paths & basic config ===
-DATA_DIR = "data"
-UPLOAD_DIR = os.path.join(DATA_DIR, "uploads")
-META_FILE = os.path.join(DATA_DIR, "meta.json")
-VECS_FILE = os.path.join(DATA_DIR, "vecs.npy")
+# --- Vector Model ---
+embedder = SentenceTransformer("all-MiniLM-L6-v2")
 
-TOP_K = 5
-CHUNK_SIZE = 1000
-CHUNK_OVERLAP = 200
-EMBED_MODEL = "text-embedding-3-small"
-CHAT_MODEL = "gpt-4o-mini"
+# ============================================================
+# 🔥 FLASK INIT
+# ============================================================
+app = Flask(__name__)
 
-app = Flask(__name__, template_folder="templates")
+CORS(app)
 
-os.makedirs(DATA_DIR, exist_ok=True)
+UPLOAD_DIR = "data/uploads"
+CRAWL_DIR = "data/crawled"
+DB_DIR = "data/index"
+
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+os.makedirs(CRAWL_DIR, exist_ok=True)
+os.makedirs(DB_DIR, exist_ok=True)
+
+DB_PATH = f"{DB_DIR}/vectors.faiss"
+META_PATH = f"{DB_DIR}/meta.json"
+
+# ============================================================
+# 🔥 VECTOR DB HELPERS
+# ============================================================
+
+def load_db():
+    if os.path.exists(DB_PATH):
+        index = faiss.read_index(DB_PATH)
+    else:
+        index = faiss.IndexFlatL2(384)
+    
+    if os.path.exists(META_PATH):
+        with open(META_PATH, "r") as f:
+            meta = json.load(f)
+    else:
+        meta = []
+    return index, meta
 
 
-# === Utility helpers ===
-
-def normspace(s: str) -> str:
-    return re.sub(r"\s+", " ", (s or "")).strip()
-
-
-def chunk_text(text: str, size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP):
-    t = normspace(text)
-    if not t:
-        return []
-    out = []
-    start = 0
-    L = len(t)
-    while start < L:
-        end = min(L, start + size)
-        out.append(t[start:end])
-        if end == L:
-            break
-        start = end - overlap
-    return out
+def save_db(index, meta):
+    faiss.write_index(index, DB_PATH)
+    with open(META_PATH, "w") as f:
+        json.dump(meta, f)
 
 
-def get_openai_key() -> str:
-    key = os.getenv("OPENAI_API_KEY", "")
-    if not key:
-        raise RuntimeError("OPENAI_API_KEY not set")
-    return key
+def embed_text(text):
+    vec = embedder.encode([text])[0]
+    return vec.astype("float32")
 
 
-def openai_embeddings(texts):
-    """
-    Call OpenAI's embeddings endpoint directly via requests.
-    """
-    key = get_openai_key()
-    resp = requests.post(
-        "https://api.openai.com/v1/embeddings",
-        headers={
-            "Authorization": f"Bearer {key}",
-            "Content-Type": "application/json",
-        },
-        json={"model": EMBED_MODEL, "input": texts},
-        timeout=60,
-    )
-    resp.raise_for_status()
-    data = resp.json()
-    return [d["embedding"] for d in data["data"]]
+# ============================================================
+# 🔥 INGEST TEXT → VECTOR STORE
+# ============================================================
+
+def ingest_text(text, source):
+    if not text.strip():
+        return False
+
+    vec = embed_text(text)
+    index, meta = load_db()
+
+    index.add(np.array([vec]))
+    meta.append({"source": source, "text": text[:500]})
+
+    save_db(index, meta)
+    return True
 
 
-def openai_chat(messages):
-    """
-    Call OpenAI's chat completion endpoint directly via requests.
-    """
-    key = get_openai_key()
-    resp = requests.post(
-        "https://api.openai.com/v1/chat/completions",
-        headers={
-            "Authorization": f"Bearer {key}",
-            "Content-Type": "application/json",
-        },
-        json={
-            "model": CHAT_MODEL,
-            "messages": messages,
-            "temperature": 0.3,
-        },
-        timeout=60,
-    )
-    resp.raise_for_status()
-    data = resp.json()
-    return data["choices"][0]["message"]["content"].strip()
+# ============================================================
+# 🔥 EXTRACT TEXT FROM HTML
+# ============================================================
+
+def extract_from_html(content):
+    soup = BeautifulSoup(content, "html.parser")
+    text = soup.get_text(" ", strip=True)
+    return text
 
 
-def save_meta(metas):
-    with open(META_FILE, "w", encoding="utf8") as f:
-        json.dump(metas, f, ensure_ascii=False, indent=2)
+# ============================================================
+# 🔥 WEBSITE CRAWLER
+# ============================================================
 
-
-def load_meta():
-    if not os.path.exists(META_FILE):
-        return []
-    with open(META_FILE, encoding="utf8") as f:
-        return json.load(f)
-
-
-def save_vecs(vecs):
-    arr = np.array(vecs, dtype=np.float32)
-    np.save(VECS_FILE, arr)
-
-
-def load_vecs():
-    if not os.path.exists(VECS_FILE):
-        # 1536 is the dimension of text-embedding-3-small
-        return np.zeros((0, 1536), dtype=np.float32)
-    return np.load(VECS_FILE)
-
-
-def semantic_search(query: str, top_k: int = TOP_K):
-    vecs = load_vecs()
-    metas = load_meta()
-    if vecs.shape[0] == 0 or not metas:
-        return [], []
-
-    q_vec = np.array(openai_embeddings([query])[0], dtype=np.float32)
-
-    # cosine similarity
-    vec_norms = np.linalg.norm(vecs, axis=1) + 1e-8
-    q_norm = np.linalg.norm(q_vec) + 1e-8
-    sims = (vecs @ q_vec) / (vec_norms * q_norm)
-
-    idxs = np.argsort(-sims)[:top_k]
-    best_chunks = [metas[int(i)]["text"] for i in idxs]
-    best_files = [metas[int(i)]["file"] for i in idxs]
-    return best_chunks, best_files
-
-
-# === Routes: pages ===
-
-@app.route("/")
-def home():
-    # chat.html is your main UI
-    return render_template("chat.html")
-
-
-@app.route("/widget")
-def widget():
-    return render_template("widget.html")
-
-
-@app.route("/admin/uploader")
-def uploader():
-    return render_template("uploader.html")
-
-
-# === Static uploads ===
-
-@app.route("/uploads/<path:filename>")
-def get_upload(filename):
-    return send_from_directory(UPLOAD_DIR, filename)
-
-
-# === API: upload & reindex ===
-
-@app.route("/upload", methods=["POST"])
-def upload():
-    """
-    Accept multiple files, save them to data/uploads.
-    """
-    files = request.files.getlist("files")
-    saved = []
-    for f in files:
-        if not f.filename:
-            continue
-        path = os.path.join(UPLOAD_DIR, f.filename)
-        f.save(path)
-        saved.append(f.filename)
-    return jsonify({"saved": saved})
-
-
-@app.route("/reindex", methods=["POST"])
-def reindex():
-    """
-    Scan data/uploads for .txt, .pdf, .docx; chunk, embed, and save vectors+metadata.
-    """
-    texts = []
-    metas = []
-
-    for fn in os.listdir(UPLOAD_DIR):
-        fp = os.path.join(UPLOAD_DIR, fn)
-        if not os.path.isfile(fp):
-            continue
-
-        lower = fn.lower()
-        if lower.endswith(".txt"):
-            with open(fp, encoding="utf8", errors="ignore") as f:
-                text = f.read()
-        elif lower.endswith(".pdf"):
-            reader = PdfReader(fp)
-            text = " ".join((page.extract_text() or "") for page in reader.pages)
-        elif lower.endswith(".docx"):
-            doc = Document(fp)
-            text = " ".join(p.text for p in doc.paragraphs)
-        else:
-            continue
-
-        for chunk in chunk_text(text):
-            metas.append({"file": fn, "text": chunk})
-            texts.append(chunk)
-
-    if not texts:
-        return jsonify({"error": "No files found in uploads/"}), 400
-
-    vecs = openai_embeddings(texts)
-    save_meta(metas)
-    save_vecs(vecs)
-
-    return jsonify(
-        {"message": "Reindex complete", "chunks": len(vecs), "files_indexed": len(set(m["file"] for m in metas))}
-    )
-
-
-# === Optional: simple crawl endpoint ===
-
-@app.route("/crawl", methods=["POST"])
-def crawl():
-    data = request.get_json(silent=True) or {}
-    url = data.get("url", "https://novacool.com")
+def crawl_url(url):
     try:
-        r = requests.get(url, timeout=20)
+        r = requests.get(url, timeout=10)
         r.raise_for_status()
-        soup = BeautifulSoup(r.text, "html.parser")
-        for s in soup(["script", "style"]):
-            s.extract()
-        text = normspace(soup.get_text())
-        chunks = chunk_text(text)
-        if not chunks:
-            return jsonify({"error": "No text found on page"}), 400
-
-        vecs = openai_embeddings(chunks)
-        metas = [{"file": f"Crawl:{url}", "text": c} for c in chunks]
-
-        old_m, old_v = load_meta(), load_vecs()
-        save_meta(old_m + metas)
-
-        if old_v.shape[0] > 0:
-            all_vecs = np.vstack([old_v, np.array(vecs, dtype=np.float32)])
-        else:
-            all_vecs = np.array(vecs, dtype=np.float32)
-        save_vecs(all_vecs)
-
-        return jsonify({"message": "Crawl complete", "chunks": len(chunks)})
+        text = extract_from_html(r.text)
+        return text
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        print("Crawl error:", e)
+        return ""
 
 
-# === Core: /chat endpoint used by your website ===
+# ============================================================
+# 🔥 ROUTE: CHAT
+# ============================================================
 
 @app.route("/chat", methods=["POST"])
 def chat():
-    """
-    Main chat endpoint expected by your website:
-    - Request JSON: { "query": "user question" }
-    - Response JSON: { "answer": "...", "sources": ["file1", "file2", ...] }
-    """
-    data = request.get_json(silent=True) or {}
-    question = (data.get("query") or "").strip()
-    if not question:
-        return jsonify({"error": "Empty query"}), 400
+    data = request.json
+    query = data.get("message", "")
 
-    try:
-        chunks, files = semantic_search(question)
-        context_block = ""
-        if chunks:
-            joined = "\n\n---\n\n".join(chunks)
-            context_block = f"Use the following Novacool knowledge base excerpts to answer:\n\n{joined}\n\n"
+    if not query:
+        return jsonify({"response": "No query provided"})
 
-        system_msg = (
-            "You are the Novacool UEF technical assistant. "
-            "Answer clearly and concisely, focusing on firefighting foam, Novacool, and related topics. "
-            "If the question is outside that domain, answer briefly but still helpfully."
-        )
+    index, meta = load_db()
 
-        user_content = context_block + f"Question: {question}"
+    if index.ntotal == 0:
+        return jsonify({"response": "Knowledge base is empty."})
 
-        messages = [
-            {"role": "system", "content": system_msg},
-            {"role": "user", "content": user_content},
+    qvec = embed_text(query)
+    D, I = index.search(np.array([qvec]), 5)
+
+    matches = [meta[i]["text"] for i in I[0] if i < len(meta)]
+
+    context = "\n".join(matches)
+
+    # --- Call OpenAI ---
+    import openai
+    openai.api_key = os.getenv("OPENAI_API_KEY")
+
+    completion = openai.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": "You are Novacool UEF's expert AI assistant."},
+            {"role": "user", "content": f"Context:\n{context}\n\nQuestion:\n{query}"}
         ]
+    )
 
-        answer = openai_chat(messages)
-
-        return jsonify(
-            {
-                "answer": answer,
-                "sources": list(dict.fromkeys(files)),  # unique in order
-            }
-        )
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    answer = completion.choices[0].message.content
+    return jsonify({"response": answer})
 
 
-# === Optional: /ask alias for testing (curl) ===
+# ============================================================
+# 🔥 ROUTE: ASK (alias)
+# ============================================================
 
 @app.route("/ask", methods=["POST"])
 def ask():
-    """
-    Convenience alias: accepts { "question": "..." } and calls the same logic as /chat.
-    """
-    data = request.get_json(silent=True) or {}
-    q = (data.get("question") or data.get("query") or "").strip()
-    if not q:
-        return jsonify({"error": "Empty question"}), 400
-    # Reuse /chat logic by faking a request object to it? Easier: call semantic_search + openai_chat again here.
+    return chat()
+
+
+# ============================================================
+# 🔥 ROUTE: UPLOAD FOR INGESTION
+# ============================================================
+
+@app.route("/upload", methods=["POST"])
+def upload():
+    if "file" not in request.files:
+        return jsonify({"error": "No file uploaded"})
+
+    file = request.files["file"]
+    fname = secure_filename(file.filename)
+    path = os.path.join(UPLOAD_DIR, fname)
+    file.save(path)
+
+    # Extract text (simple UTF-8 decode)
     try:
-        chunks, files = semantic_search(q)
-        context_block = ""
-        if chunks:
-            joined = "\n\n---\n\n".join(chunks)
-            context_block = f"Use the following Novacool knowledge base excerpts to answer:\n\n{joined}\n\n"
+        content = file.read().decode("utf-8", errors="ignore")
+    except:
+        content = ""
 
-        system_msg = (
-            "You are the Novacool UEF technical assistant. "
-            "Answer clearly and concisely, focusing on firefighting foam, Novacool, and related topics."
-        )
+    if not content.strip():
+        return jsonify({"error": "No text could be extracted from this file"})
 
-        user_content = context_block + f"Question: {q}"
-        messages = [
-            {"role": "system", "content": system_msg},
-            {"role": "user", "content": user_content},
-        ]
-        answer = openai_chat(messages)
-        return jsonify(
-            {
-                "answer": answer,
-                "sources": list(dict.fromkeys(files)),
-            }
-        )
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    ingest_text(content, fname)
+    return jsonify({"status": "ok", "file": fname})
 
 
-# === Simple healthcheck ===
+# ============================================================
+# 🔥 ROUTE: REINDEX (full rebuild)
+# ============================================================
+
+@app.route("/reindex", methods=["POST"])
+def reindex():
+    # Clear previous DB
+    if os.path.exists(DB_PATH): os.remove(DB_PATH)
+    if os.path.exists(META_PATH): os.remove(META_PATH)
+
+    for fname in os.listdir(UPLOAD_DIR):
+        fpath = os.path.join(UPLOAD_DIR, fname)
+        try:
+            with open(fpath, "r", encoding="utf-8", errors="ignore") as f:
+                text = f.read()
+                ingest_text(text, fname)
+        except:
+            continue
+
+    return jsonify({"status": "reindexed"})
+
+
+# ============================================================
+# 🔥 ROUTE: WEBSITE CRAWLER INGEST
+# ============================================================
+
+@app.route("/crawl", methods=["POST"])
+def crawl():
+    data = request.json
+    url = data.get("url", "")
+
+    if not url.startswith("http"):
+        return jsonify({"error": "Invalid URL"})
+
+    text = crawl_url(url)
+    if not text.strip():
+        return jsonify({"error": "Could not extract text"})
+
+    ingest_text(text, url)
+    return jsonify({"status": "indexed", "url": url})
+
+
+# ============================================================
+# 🔥 ROUTE: ADMIN UPLOADER DASHBOARD
+# ============================================================
+
+@app.route("/admin/uploader")
+def admin_uploader():
+    return send_from_directory("static", "uploader.html")
+
+
+# ============================================================
+# 🔥 STATIC SERVE (widget, loader, logos)
+# ============================================================
+
+@app.route("/static/<path:path>")
+def serve_static(path):
+    return send_from_directory("static", path)
+
+
+# ============================================================
+# 🔥 REQUIRED HEADERS FOR GETRESPONSE WIDGET
+# ============================================================
+
+@app.after_request
+def add_headers(response):
+    response.headers["X-Frame-Options"] = "ALLOWALL"
+    response.headers["Content-Security-Policy"] = "frame-ancestors *"
+    return response
+
+
+# ============================================================
+# 🔥 HEALTH CHECK
+# ============================================================
 
 @app.route("/health")
 def health():
     return jsonify({"status": "ok"})
 
 
+# ============================================================
+# 🔥 RUN APP (Render uses Gunicorn, not this block)
+# ============================================================
+
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", "5000"))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    app.run(host="0.0.0.0", port=5000)
