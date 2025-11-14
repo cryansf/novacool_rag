@@ -1,132 +1,546 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Novacool Fire AI Assistant</title>
+  <meta charset="UTF-8" />
+  <title>Novacool AI – Chat Widget</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    :root {
+      --nc-red: #c8102e;
+      --nc-orange: #ff7a1a;
+      --nc-gold: #ffcf33;
+      --nc-blue: #003a70;
+      --nc-bg: #05070a;
+      --nc-surface: #10131a;
+      --nc-border: #222839;
+      --nc-text: #f5f7ff;
+      --nc-muted: #8c93aa;
+      --nc-accent: #ffb347;
+    }
 
-<style>
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+    }
+
+    html,
     body {
-        margin: 0;
-        font-family: system-ui, sans-serif;
-        background: linear-gradient(180deg, #1a0000, #300000, #1a0000);
-        color: white;
-        overflow: hidden;
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+        sans-serif;
+      color: var(--nc-text);
+      background: radial-gradient(circle at 0 0, #20101a 0, #05070a 55%);
     }
 
-    #header {
-        background: linear-gradient(90deg, #cc0000, #660000);
-        padding: 14px;
-        text-align: center;
-        font-size: 20px;
-        font-weight: bold;
-        letter-spacing: 0.8px;
-        box-shadow: 0 0 18px rgba(255,0,0,0.8);
+    body {
+      display: flex;
+      min-height: 100vh;
     }
 
-    #logo {
-        width: 42px;
-        height: 42px;
-        margin-right: 10px;
-        vertical-align: middle;
+    .nc-chat-shell {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      max-width: 100vw;
+      max-height: 100vh;
+      background: radial-gradient(circle at top, #161824 0, #05070a 60%);
     }
 
-    #chat-container {
-        height: calc(100vh - 140px);
-        overflow-y: auto;
-        padding: 12px;
-        box-sizing: border-box;
-        scrollbar-width: thin;
+    .nc-chat-header {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.75rem 1rem;
+      background: linear-gradient(
+        125deg,
+        var(--nc-red) 0%,
+        var(--nc-orange) 35%,
+        var(--nc-gold) 70%,
+        #1b1f2f 100%
+      );
+      color: #fff;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.7);
+      position: relative;
+      z-index: 2;
     }
 
-    .msg {
-        padding: 12px 14px;
-        border-radius: 12px;
-        margin-bottom: 12px;
-        max-width: 80%;
-        line-height: 1.4;
-        word-break: break-word;
-        font-size: 15px;
+    .nc-logo-pill {
+      width: 40px;
+      height: 40px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      background: radial-gradient(circle at 30% 0, #ffe5e5 0, #ff4d4d 30%, #700020 80%);
+      border: 1px solid rgba(255, 255, 255, 0.35);
+      box-shadow: 0 0 18px rgba(255, 120, 40, 0.85);
     }
 
-    .user {
-        background: rgba(255,0,0,0.25);
-        border-left: 3px solid #cc0000;
-        margin-left: auto;
+    .nc-logo-pill span {
+      transform: translateY(1px);
     }
 
-    .bot {
-        background: rgba(255,255,255,0.12);
-        border-left: 3px solid #ff0000;
+    .nc-header-main {
+      flex: 1;
+      min-width: 0;
     }
 
-    #input-area {
-        display: flex;
-        padding: 10px;
-        background: #200000;
-        box-shadow: 0 -2px 12px rgba(255,0,0,0.4);
+    .nc-header-title {
+      font-size: 0.95rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
     }
 
-    #user-input {
-        flex: 1;
-        padding: 12px;
-        border: none;
-        border-radius: 8px;
-        font-size: 15px;
-        background: rgba(255,255,255,0.08);
-        color: white;
-        outline: none;
+    .nc-header-title span.badge {
+      font-size: 0.6rem;
+      padding: 0.1rem 0.45rem;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.5);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      opacity: 0.9;
     }
 
-    #send-btn {
-        padding: 0 18px;
-        margin-left: 10px;
-        border: none;
-        border-radius: 8px;
-        background: linear-gradient(180deg, #ff0000, #660000);
-        color: white;
-        cursor: pointer;
-        font-size: 16px;
-        box-shadow: 0 0 14px rgba(255,0,0,0.8);
-        transition: 0.2s;
+    .nc-header-subtitle {
+      font-size: 0.75rem;
+      opacity: 0.9;
+      margin-top: 0.1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
     }
 
-    #send-btn:hover {
-        filter: brightness(1.15);
-        box-shadow: 0 0 20px rgba(255,0,0,1);
+    .nc-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #4ade80;
+      box-shadow: 0 0 10px #4ade80;
     }
-</style>
+
+    .nc-header-right {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .nc-chip {
+      font-size: 0.65rem;
+      padding: 0.15rem 0.5rem;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.6);
+      text-transform: uppercase;
+      letter-spacing: 0.09em;
+      opacity: 0.92;
+    }
+
+    .nc-firebar {
+      position: absolute;
+      inset: auto 0 -2px 0;
+      height: 2px;
+      background: linear-gradient(
+        90deg,
+        rgba(255, 255, 255, 0.85),
+        rgba(255, 200, 50, 0.9),
+        rgba(255, 120, 40, 0.9),
+        rgba(200, 16, 46, 0.9),
+        rgba(0, 0, 0, 0.95)
+      );
+      box-shadow: 0 0 22px rgba(255, 160, 40, 0.85);
+      opacity: 0.85;
+    }
+
+    .nc-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1rem;
+      background:
+        radial-gradient(circle at 0 0, rgba(255, 255, 255, 0.08) 0, transparent 50%),
+        radial-gradient(circle at 100% 100%, rgba(255, 100, 0, 0.18) 0, transparent 60%),
+        radial-gradient(circle at 0 100%, rgba(0, 58, 112, 0.35) 0, transparent 55%),
+        #05070a;
+      background-attachment: fixed;
+    }
+
+    .nc-message-row {
+      display: flex;
+      margin-bottom: 0.6rem;
+    }
+
+    .nc-message-row.user {
+      justify-content: flex-end;
+    }
+
+    .nc-message {
+      max-width: 82%;
+      border-radius: 18px;
+      padding: 0.55rem 0.8rem;
+      font-size: 0.8rem;
+      line-height: 1.35;
+      box-shadow: 0 8px 18px rgba(0, 0, 0, 0.5);
+      position: relative;
+      backdrop-filter: blur(12px);
+    }
+
+    .nc-message.bot {
+      background: radial-gradient(circle at 0 0, #283047 0, #101525 55%);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .nc-message.user {
+      background: linear-gradient(135deg, #ff7a1a, #c8102e);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+    }
+
+    .nc-message small {
+      display: block;
+      margin-top: 0.25rem;
+      font-size: 0.65rem;
+      opacity: 0.7;
+    }
+
+    .nc-typing {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 0.9rem;
+    }
+
+    .nc-typing span {
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: #ffcf33;
+      animation: nc-bounce 1.2s infinite ease-in-out;
+    }
+
+    .nc-typing span:nth-child(2) {
+      animation-delay: 0.15s;
+    }
+
+    .nc-typing span:nth-child(3) {
+      animation-delay: 0.3s;
+    }
+
+    @keyframes nc-bounce {
+      0%,
+      80%,
+      100% {
+        transform: translateY(0);
+        opacity: 0.4;
+      }
+      40% {
+        transform: translateY(-4px);
+        opacity: 1;
+      }
+    }
+
+    .nc-input-shell {
+      padding: 0.6rem 0.7rem 0.7rem;
+      background: linear-gradient(to top, #05070a, #080a11);
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      box-shadow: 0 -6px 18px rgba(0, 0, 0, 0.9);
+    }
+
+    .nc-input-inner {
+      display: flex;
+      align-items: flex-end;
+      gap: 0.45rem;
+      background: #060810;
+      border-radius: 999px;
+      border: 1px solid var(--nc-border);
+      padding: 0.2rem 0.25rem 0.2rem 0.8rem;
+    }
+
+    .nc-input-inner:focus-within {
+      border-color: var(--nc-orange);
+      box-shadow: 0 0 0 1px rgba(255, 132, 40, 0.7);
+    }
+
+    .nc-textarea {
+      flex: 1;
+      min-height: 34px;
+      max-height: 80px;
+      resize: none;
+      border: none;
+      outline: none;
+      background: transparent;
+      color: var(--nc-text);
+      font: inherit;
+      font-size: 0.8rem;
+      padding: 0.45rem 0 0.4rem 0;
+    }
+
+    .nc-textarea::placeholder {
+      color: var(--nc-muted);
+      opacity: 0.9;
+    }
+
+    .nc-send-btn {
+      flex-shrink: 0;
+      border: none;
+      outline: none;
+      cursor: pointer;
+      width: 36px;
+      height: 36px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.9rem;
+      color: #fff;
+      background: radial-gradient(circle at 20% 0, #ffe8c0 0, #ff7a1a 40%, #c8102e 80%);
+      box-shadow: 0 0 14px rgba(255, 132, 40, 0.9);
+      transform-origin: center;
+      transition: transform 0.12s ease-out, box-shadow 0.12s ease-out,
+        background 0.15s ease-out;
+    }
+
+    .nc-send-btn:hover {
+      transform: translateY(-1px) scale(1.03);
+      box-shadow: 0 0 18px rgba(255, 180, 80, 1);
+    }
+
+    .nc-send-btn:active {
+      transform: translateY(1px) scale(0.96);
+      box-shadow: 0 0 10px rgba(255, 132, 40, 0.7);
+    }
+
+    .nc-send-btn[disabled] {
+      opacity: 0.6;
+      cursor: default;
+      box-shadow: none;
+    }
+
+    .nc-footer-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 0.3rem;
+      padding: 0 0.1rem;
+      font-size: 0.65rem;
+      color: var(--nc-muted);
+    }
+
+    .nc-footer-meta a {
+      color: var(--nc-accent);
+      text-decoration: none;
+    }
+
+    .nc-footer-meta a:hover {
+      text-decoration: underline;
+    }
+
+    @media (max-width: 480px) {
+      .nc-chat-header {
+        padding-inline: 0.75rem;
+      }
+      .nc-header-title {
+        font-size: 0.9rem;
+      }
+      .nc-header-subtitle {
+        font-size: 0.7rem;
+      }
+      .nc-messages {
+        padding-inline: 0.75rem;
+      }
+      .nc-message {
+        max-width: 88%;
+      }
+      .nc-input-inner {
+        border-radius: 20px;
+      }
+    }
+  </style>
 </head>
-
 <body>
+  <div class="nc-chat-shell">
+    <header class="nc-chat-header">
+      <div class="nc-logo-pill" aria-hidden="true">
+        <span>NC</span>
+      </div>
+      <div class="nc-header-main">
+        <div class="nc-header-title">
+          Novacool AI
+          <span class="badge">Fire Foam Guide</span>
+        </div>
+        <div class="nc-header-subtitle">
+          <span class="nc-dot"></span>
+          Live assistant for Novacool UEF questions
+        </div>
+      </div>
+      <div class="nc-header-right">
+        <div class="nc-chip">PFAS-Free</div>
+      </div>
+      <div class="nc-firebar"></div>
+    </header>
 
-<div id="header">
-    <img id="logo" src="/static/logo-fire.png" alt="logo">
-    Novacool Fire AI Assistant
-</div>
+    <main class="nc-messages" id="nc-messages" aria-live="polite"></main>
 
-<div id="chat-container">
-    <div class="msg bot">
-        🔥 <b>Welcome to the Novacool Fire Assistant!</b><br><br>
-        Ask me anything about Novacool UEF, fire behavior, mix ratios, equipment compatibility,
-        environmental benefits, or real-world application.<br><br>
-        Try:<br>
-        <ul>
-            <li>“Explain 0.1% finished foam advantages.”</li>
-            <li>“How does Novacool compare to fluorine foams?”</li>
-        </ul>
+    <div class="nc-input-shell">
+      <div class="nc-input-inner">
+        <textarea
+          id="nc-input"
+          class="nc-textarea"
+          rows="1"
+          placeholder="Ask about mix rates, finished foam cost, UL/NFPA use cases..."
+        ></textarea>
+        <button id="nc-send" class="nc-send-btn" aria-label="Send message">
+          ➤
+        </button>
+      </div>
+      <div class="nc-footer-meta">
+        <span>Powered by Novacool UEF · PFAS-free wetting agent</span>
+        <span>
+          <a href="https://novacool.com" target="_blank" rel="noopener noreferrer"
+            >novacool.com</a
+          >
+        </span>
+      </div>
     </div>
-</div>
+  </div>
 
-<div id="input-area">
-    <input id="user-input" placeholder="Type your question..." />
-    <button id="send-btn">Send</button>
-</div>
+  <script>
+    // === CONFIG: update BACKEND_URL to your Render /chat endpoint ===
+    const BACKEND_URL = "https://YOUR-RENDER-APP-URL/chat";
 
-<script>
-    const chatContainer = document.getElementById("chat-container");
-    const userInput = document.getElementById("user-input");
-    const sendBtn = document.getElementById("send-btn");
+    const messagesEl = document.getElementById("nc-messages");
+    const inputEl = document.getElementById("nc-input");
+    const sendBtn = document.getElementById("nc-send");
 
-    function addMessage(text, sender) {
-        const div = document.createElement("div");
+    const history = [];
+
+    function appendMessage(role, text, options = {}) {
+      const row = document.createElement("div");
+      row.className = "nc-message-row " + (role === "user" ? "user" : "bot");
+
+      const msg = document.createElement("div");
+      msg.className = "nc-message " + (role === "user" ? "user" : "bot");
+
+      if (options.typing) {
+        const t = document.createElement("div");
+        t.className = "nc-typing";
+        t.innerHTML = "<span></span><span></span><span></span>";
+        msg.appendChild(t);
+      } else {
+        msg.textContent = text;
+      }
+
+      if (options.meta) {
+        const meta = document.createElement("small");
+        meta.textContent = options.meta;
+        msg.appendChild(meta);
+      }
+
+      row.appendChild(msg);
+      messagesEl.appendChild(row);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+      return row;
+    }
+
+    function removeElement(el) {
+      if (el && el.parentNode) {
+        el.parentNode.removeChild(el);
+      }
+    }
+
+    async function sendMessage() {
+      const text = inputEl.value.trim();
+      if (!text) return;
+
+      inputEl.value = "";
+      inputEl.style.height = "auto";
+
+      appendMessage("user", text);
+      history.push({ role: "user", content: text });
+
+      sendBtn.disabled = true;
+
+      const typingRow = appendMessage("assistant", "", { typing: true });
+
+      try {
+        const res = await fetch(BACKEND_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            message: text,
+            history,
+          }),
+        });
+
+        removeElement(typingRow);
+
+        if (!res.ok) {
+          const errorText = `Error ${res.status}: ${res.statusText}`;
+          appendMessage(
+            "assistant",
+            "I'm having trouble reaching the Novacool server. Please try again in a moment.\n\n" +
+              errorText
+          );
+          history.push({
+            role: "assistant",
+            content: "Backend error: " + errorText,
+          });
+          return;
+        }
+
+        const data = await res.json();
+        const answer =
+          data.answer ||
+          data.response ||
+          data.message ||
+          "I received a response, but it was in an unexpected format.";
+
+        appendMessage("assistant", answer);
+        history.push({ role: "assistant", content: answer });
+      } catch (err) {
+        removeElement(typingRow);
+        const msg =
+          "I couldn't reach the Novacool AI backend. This is usually a temporary network or server issue. Please try again.";
+        appendMessage("assistant", msg);
+        history.push({ role: "assistant", content: msg + " (" + err + ")" });
+      } finally {
+        sendBtn.disabled = false;
+      }
+    }
+
+    // Handle send button
+    sendBtn.addEventListener("click", sendMessage);
+
+    // Handle Enter vs Shift+Enter
+    inputEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    // Auto grow textarea
+    inputEl.addEventListener("input", () => {
+      inputEl.style.height = "auto";
+      inputEl.style.height = Math.min(inputEl.scrollHeight, 80) + "px";
+    });
+
+    // Warm welcome message
+    window.addEventListener("DOMContentLoaded", () => {
+      const welcome =
+        "Hi, I'm the Novacool AI assistant. Ask me anything about Novacool UEF – mix rates, finished foam cost, NFPA/UL listings, deployment tactics, or environmental data.";
+      appendMessage("assistant", welcome, {
+        meta: "Tip: you can paste a whole scenario, not just a short question.",
+      });
+      history.push({ role: "assistant", content: welcome });
+    });
+  </script>
+</body>
+</html>
