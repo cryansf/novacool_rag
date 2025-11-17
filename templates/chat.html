@@ -1,57 +1,209 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Novacool Chat Assistant</title>
+  <meta charset="utf-8" />
+  <title>Novacool AI Assistant</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body{margin:0;background:#0b0b0d;color:#fff;font-family:Inter,Arial,sans-serif;display:flex;flex-direction:column;height:100vh}
-    header{display:flex;align-items:center;gap:10px;padding:12px;background:#131316;border-bottom:1px solid #222}
-    header img{height:40px}
-    header h1{font-size:20px;margin:0;color:#ff445a}
-    #log{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:12px;background:linear-gradient(180deg,#101014,#0b0b0d)}
-    .msg{max-width:80%;padding:12px 14px;border-radius:12px;line-height:1.5}
-    .you{align-self:flex-end;background:#1d1d21}
-    .bot{align-self:flex-start;background:#141418}
-    form{display:flex;gap:8px;padding:14px;border-top:1px solid #222;background:#0d0d10}
-    input{flex:1;padding:12px;border-radius:8px;background:#0b0b0e;color:#fff;border:1px solid #333}
-    button{padding:12px 16px;background:#e11d2e;color:#fff;font-weight:bold;border:none;border-radius:8px;cursor:pointer}
-    button:hover{background:#ff445a}
+    :root {
+      --bg: #05060a;
+      --panel: #10121a;
+      --accent: #ff3b3b;
+      --accent2: #0051ff;
+      --text: #f9fafb;
+      --muted: #9ca3af;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at 0 0,#15192b 0,#05060a 45%,#000000 100%);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 16px;
+      background: linear-gradient(135deg,#0b1020,#141826);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    header img {
+      height: 38px;
+    }
+    header h1 {
+      font-size: 18px;
+      margin: 0;
+    }
+    header small {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    #log {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .msg {
+      max-width: 80%;
+      padding: 10px 12px;
+      border-radius: 14px;
+      line-height: 1.5;
+      font-size: 14px;
+      white-space: pre-wrap;
+    }
+    .you {
+      align-self: flex-end;
+      background: linear-gradient(135deg,#ff3b3b,#ff7b3b);
+      color: #fff;
+    }
+    .bot {
+      align-self: flex-start;
+      background: #141826;
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+    .meta {
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    form {
+      display: flex;
+      gap: 8px;
+      padding: 10px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      background: #05060aee;
+      backdrop-filter: blur(12px);
+    }
+    input[type="text"] {
+      flex: 1;
+      padding: 10px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(148,163,184,0.4);
+      background: #020309;
+      color: var(--text);
+      font-size: 14px;
+    }
+    input[type="text"]::placeholder {
+      color: #6b7280;
+    }
+    button {
+      border-radius: 999px;
+      border: none;
+      padding: 0 16px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      background: linear-gradient(135deg,#ff3b3b,#ff7b3b);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    button:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+    @media (max-width: 600px) {
+      header h1 { font-size: 16px; }
+      .msg { max-width: 90%; }
+    }
   </style>
 </head>
 <body>
   <header>
-    <img src="https://swfirefightingfoam.com/images/logo1-web.png" alt="Novacool Logo"/>
+    <img src="https://swfirefightingfoam.com/images/logo1-web.png" alt="Novacool Logo" />
     <div>
       <h1>Novacool AI Assistant</h1>
-      <small>Ask about UEF mix rates, certifications, environmental data & more</small>
+      <small>Ask about UEF mix ratios, applications, certifications & environmental data.</small>
     </div>
   </header>
+
   <div id="log"></div>
-  <form id="chat">
-    <input id="q" type="text" placeholder="Ask a question..." autocomplete="off"/>
-    <button type="submit">Send</button>
+
+  <form id="chat-form">
+    <input
+      id="q"
+      type="text"
+      placeholder="Ask a question about Novacool UEF..."
+      autocomplete="off"
+    />
+    <button type="submit">
+      <span>Send</span> <span id="spinner" style="display:none;">⏳</span>
+    </button>
   </form>
+
   <script>
-    const log = document.getElementById('log');
-    const form = document.getElementById('chat');
-    const q = document.getElementById('q');
-    function add(role, html){
-      const d=document.createElement('div');
-      d.className='msg '+(role==='you'?'you':'bot');
-      d.innerHTML=html.replace(/\n/g,'<br/>');
-      log.appendChild(d); log.scrollTop=log.scrollHeight;
+    const log = document.getElementById("log");
+    const form = document.getElementById("chat-form");
+    const q = document.getElementById("q");
+    const spinner = document.getElementById("spinner");
+
+    function addMessage(role, text) {
+      const wrap = document.createElement("div");
+      const meta = document.createElement("div");
+      const bubble = document.createElement("div");
+
+      wrap.style.display = "flex";
+      wrap.style.flexDirection = "column";
+      wrap.style.alignItems = role === "you" ? "flex-end" : "flex-start";
+
+      meta.className = "meta";
+      meta.textContent = role === "you" ? "You" : "Novacool AI";
+
+      bubble.className = "msg " + (role === "you" ? "you" : "bot");
+      bubble.textContent = text;
+
+      wrap.appendChild(meta);
+      wrap.appendChild(bubble);
+      log.appendChild(wrap);
+
+      log.scrollTop = log.scrollHeight;
+      return bubble;
     }
-    form.addEventListener('submit', async(e)=>{
+
+    async function sendQuestion(text) {
+      spinner.style.display = "inline-block";
+      try {
+        const res = await fetch("/ask", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question: text })
+        });
+
+        const data = await res.json();
+        if (data.answer) {
+          addMessage("bot", data.answer);
+        } else if (data.error) {
+          addMessage("bot", "Error: " + data.error);
+        } else {
+          addMessage("bot", "No answer returned.");
+        }
+      } catch (err) {
+        addMessage("bot", "Network error: " + err.message);
+      } finally {
+        spinner.style.display = "none";
+      }
+    }
+
+    form.addEventListener("submit", (e) => {
       e.preventDefault();
-      const text=q.value.trim(); if(!text)return;
-      add('you',text); q.value=''; const hold=add('bot','Thinking...');
-      try{
-        const r=await fetch('/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:text})});
-        const data=await r.json();
-        hold.innerHTML=data.answer?data.answer.replace(/\n/g,'<br/>'):'No answer';
-      }catch(err){hold.innerHTML='Error: '+err;}
+      const text = q.value.trim();
+      if (!text) return;
+      addMessage("you", text);
+      q.value = "";
+      sendQuestion(text);
     });
+
+    // Focus input on load (nice UX)
+    window.addEventListener("load", () => q.focus());
   </script>
 </body>
 </html>
