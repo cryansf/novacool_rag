@@ -1,13 +1,20 @@
 import os
-import requests
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
+from openai import OpenAI
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
 CORS(app)
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")  # your sk- or sk-proj key
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_PROJECT_ID = os.getenv("OPENAI_PROJECT_ID")  # <-- REQUIRED for sk-proj keys
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+
+# Create OpenAI client (supports sk and sk-proj keys)
+client = OpenAI(
+    api_key=OPENAI_API_KEY,
+    project=OPENAI_PROJECT_ID if OPENAI_PROJECT_ID else None
+)
 
 
 @app.route("/")
@@ -22,37 +29,21 @@ def health():
 
 @app.route("/chat")
 def chat_page():
-    # Full-page chat UI
     return render_template("chat.html")
 
 
 @app.route("/ask", methods=["POST"])
 def ask():
-    """
-    Frontend calls this with JSON:
-      { "question": "..." }
-    We call OpenAI and return:
-      { "answer": "..." }  OR  { "error": "..." }
-    """
     try:
-        if not OPENAI_API_KEY:
-            return jsonify({"error": "Missing OPENAI_API_KEY in environment"}), 500
-
         data = request.get_json(silent=True) or {}
         question = (data.get("question") or "").strip()
 
         if not question:
             return jsonify({"error": "No question provided"}), 400
 
-        # --- Call OpenAI Chat Completions API ---
-        url = "https://api.openai.com/v1/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {OPENAI_API_KEY}",
-            "Content-Type": "application/json",
-        }
-        payload = {
-            "model": OPENAI_MODEL,
-            "messages": [
+        response = client.chat.completions.create(
+            model=OPENAI_MODEL,
+            messages=[
                 {
                     "role": "system",
                     "content": (
@@ -64,36 +55,15 @@ def ask():
                 },
                 {"role": "user", "content": question},
             ],
-            "temperature": 0.4,
-        }
-
-        r = requests.post(url, json=payload, headers=headers, timeout=60)
-        if not r.ok:
-            # Try to surface OpenAI error message
-            try:
-                err = r.json()
-                msg = err.get("error", {}).get("message", r.text)
-            except Exception:
-                msg = r.text
-            return jsonify({"error": f"OpenAI error: {msg}"}), 500
-
-        resp = r.json()
-        answer = (
-            resp.get("choices", [{}])[0]
-            .get("message", {})
-            .get("content", "")
-            .strip()
+            temperature=0.4,
         )
 
-        if not answer:
-            return jsonify({"error": "Empty answer from OpenAI"}), 500
-
-        return jsonify({"answer": answer}), 200
+        answer = response.choices[0].message.content.strip()
+        return jsonify({"answer": answer})
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
 if __name__ == "__main__":
-    # Local dev only; Render will use gunicorn
     app.run(host="0.0.0.0", port=5000)
