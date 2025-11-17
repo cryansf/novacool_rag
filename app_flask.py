@@ -1,67 +1,58 @@
 import os
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 import requests
 
 app = Flask(__name__)
 CORS(app)
 
-OPENAI_KEY = os.getenv("OPENAI_API_KEY")         # your sk-proj key
-PROJECT_ID = os.getenv("OPENAI_PROJECT_ID")      # must be added in Render dashboard
+# === environment variables ===
+OPENAI_KEY = os.getenv("OPENAI_API_KEY")
+PROJECT_ID = os.getenv("OPENAI_PROJECT_ID")
 
 @app.route("/")
 def home():
-    return "Novacool AI backend running"
-
-@app.route("/chat")
-def chat_page():
-    return render_template("chat.html")
-
-@app.route("/uploader")
-def uploader_page():
-    return render_template("uploader.html")
+    return "Novacool AI backend is running"
 
 @app.route("/ask", methods=["POST"])
 def ask():
     try:
-        body = request.get_json()
-        question = body.get("question", "").strip()
-
+        question = request.json.get("question", "").strip()
         if not question:
             return jsonify({"error": "No question received"}), 400
+
         if not OPENAI_KEY:
             return jsonify({"error": "Missing OPENAI_API_KEY"}), 500
+
         if not PROJECT_ID:
             return jsonify({"error": "Missing OPENAI_PROJECT_ID"}), 500
 
-        # NEW endpoint required for sk-proj keys
-        response = requests.post(
-            f"https://api.openai.com/v1/projects/{PROJECT_ID}/responses",
-            headers={
-                "Authorization": f"Bearer {OPENAI_KEY}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": "gpt-5.1-mini",
-                "input": question,
-            },
-            timeout=60
-        )
+        url = f"https://api.openai.com/v1/projects/{PROJECT_ID}/responses"
 
-        data = response.json()
+        payload = {
+            "model": "gpt-4o-mini",      # fast + inexpensive
+            "input": question
+        }
 
-        # debug capture if needed
-        # print(data)
+        headers = {
+            "Authorization": f"Bearer {OPENAI_KEY}",
+            "Content-Type": "application/json"
+        }
 
+        r = requests.post(url, json=payload, headers=headers, timeout=60)
+        data = r.json()
+
+        print("\n[OPENAI RESPONSE RAW]\n", data, "\n")  # Visible in Render logs for debugging
+
+        # === success ===
         if "output_text" in data:
-            answer = data["output_text"]
-            return jsonify({"answer": answer})
+            return jsonify({"answer": data["output_text"]})
 
-        elif "error" in data:
+        # === OpenAI error bubble ===
+        if "error" in data:
             return jsonify({"error": data["error"]["message"]}), 500
 
-        else:
-            return jsonify({"error": "Unknown response format"}), 500
+        return jsonify({"error": "Unexpected response format"}), 500
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
