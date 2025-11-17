@@ -1,62 +1,99 @@
 import os
-from flask import Flask, request, jsonify
-from flask_cors import CORS
 import requests
+from flask import Flask, request, jsonify, render_template
+from flask_cors import CORS
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder="templates", static_folder="static")
 CORS(app)
 
-# === environment variables ===
-OPENAI_KEY = os.getenv("OPENAI_API_KEY")
-PROJECT_ID = os.getenv("OPENAI_PROJECT_ID")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")  # your sk- or sk-proj key
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+
 
 @app.route("/")
-def home():
-    return "Novacool AI backend is running"
+def index():
+    return "Novacool AI backend is running", 200
+
+
+@app.route("/health")
+def health():
+    return {"status": "ok"}, 200
+
+
+@app.route("/chat")
+def chat_page():
+    # Full-page chat UI
+    return render_template("chat.html")
+
 
 @app.route("/ask", methods=["POST"])
 def ask():
+    """
+    Frontend calls this with JSON:
+      { "question": "..." }
+    We call OpenAI and return:
+      { "answer": "..." }  OR  { "error": "..." }
+    """
     try:
-        question = request.json.get("question", "").strip()
+        if not OPENAI_API_KEY:
+            return jsonify({"error": "Missing OPENAI_API_KEY in environment"}), 500
+
+        data = request.get_json(silent=True) or {}
+        question = (data.get("question") or "").strip()
+
         if not question:
-            return jsonify({"error": "No question received"}), 400
+            return jsonify({"error": "No question provided"}), 400
 
-        if not OPENAI_KEY:
-            return jsonify({"error": "Missing OPENAI_API_KEY"}), 500
-
-        if not PROJECT_ID:
-            return jsonify({"error": "Missing OPENAI_PROJECT_ID"}), 500
-
-        url = f"https://api.openai.com/v1/projects/{PROJECT_ID}/responses"
-
-        payload = {
-            "model": "gpt-4o-mini",      # fast + inexpensive
-            "input": question
-        }
-
+        # --- Call OpenAI Chat Completions API ---
+        url = "https://api.openai.com/v1/chat/completions"
         headers = {
-            "Authorization": f"Bearer {OPENAI_KEY}",
-            "Content-Type": "application/json"
+            "Authorization": f"Bearer {OPENAI_API_KEY}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": OPENAI_MODEL,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        "You are Novacool AI, an assistant for SW Firefighting Foam & Equipment. "
+                        "Answer clearly and concisely based on what you know about Novacool UEF, "
+                        "its mix ratios, applications, certifications, environmental profile, "
+                        "and firefighting best practices. If you don't know, say so."
+                    ),
+                },
+                {"role": "user", "content": question},
+            ],
+            "temperature": 0.4,
         }
 
         r = requests.post(url, json=payload, headers=headers, timeout=60)
-        data = r.json()
+        if not r.ok:
+            # Try to surface OpenAI error message
+            try:
+                err = r.json()
+                msg = err.get("error", {}).get("message", r.text)
+            except Exception:
+                msg = r.text
+            return jsonify({"error": f"OpenAI error: {msg}"}), 500
 
-        print("\n[OPENAI RESPONSE RAW]\n", data, "\n")  # Visible in Render logs for debugging
+        resp = r.json()
+        answer = (
+            resp.get("choices", [{}])[0]
+            .get("message", {})
+            .get("content", "")
+            .strip()
+        )
 
-        # === success ===
-        if "output_text" in data:
-            return jsonify({"answer": data["output_text"]})
+        if not answer:
+            return jsonify({"error": "Empty answer from OpenAI"}), 500
 
-        # === OpenAI error bubble ===
-        if "error" in data:
-            return jsonify({"error": data["error"]["message"]}), 500
-
-        return jsonify({"error": "Unexpected response format"}), 500
+        return jsonify({"answer": answer}), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
 if __name__ == "__main__":
+    # Local dev only; Render will use gunicorn
     app.run(host="0.0.0.0", port=5000)
