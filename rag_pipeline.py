@@ -1,85 +1,89 @@
 import os
 import faiss
 import numpy as np
-from sentence_transformers import SentenceTransformer
-from openai import OpenAI
+import pandas as pd
+from uuid import uuid4
+from docx import Document
 from PyPDF2 import PdfReader
+from sentence_transformers import SentenceTransformer
+import openai
 
-# === Configuration ===
-DATA_DIR = "uploads"
-INDEX_FILE = "data/knowledge_base.index"
-MODEL_NAME = "all-MiniLM-L6-v2"
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
-# === Initialize embedding model ===
-embedding_model = SentenceTransformer(MODEL_NAME)
-client = OpenAI()
+UPLOAD_DIR = "uploads"
+DATA_DIR = "data"
+EMBEDDINGS_FILE = os.path.join(DATA_DIR, "embeddings.faiss")
+METADATA_FILE = os.path.join(DATA_DIR, "metadata.csv")
 
-# === Create or load FAISS index ===
-def load_or_create_index():
-    if os.path.exists(INDEX_FILE):
-        index = faiss.read_index(INDEX_FILE)
-        print(f"[RAG] Loaded existing FAISS index: {INDEX_FILE}")
-    else:
-        index = faiss.IndexFlatL2(384)
-        print("[RAG] Created new FAISS index.")
-    return index
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+os.makedirs(DATA_DIR, exist_ok=True)
 
-index = load_or_create_index()
-documents = []
+embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
 
 
-# === Ingest text from PDF or DOCX ===
-def ingest_text(file_path):
-    global index, documents
+def extract_text(file_path):
     text = ""
     if file_path.endswith(".pdf"):
-        reader = PdfReader(file_path)
-        for page in reader.pages:
-            text += page.extract_text() or ""
+        with open(file_path, "rb") as f:
+            reader = PdfReader(f)
+            for page in reader.pages:
+                text += page.extract_text() + "\n"
     elif file_path.endswith(".docx"):
-        from docx import Document
         doc = Document(file_path)
-        for p in doc.paragraphs:
-            text += p.text + "\n"
-    else:
-        raise ValueError("Unsupported file type")
-
-    if not text.strip():
-        print(f"[RAG] Warning: No text extracted from {file_path}")
-        return
-
-    docs = [text[i:i+1000] for i in range(0, len(text), 1000)]
-    embeddings = embedding_model.encode(docs)
-    index.add(np.array(embeddings, dtype="float32"))
-    documents.extend(docs)
-
-    faiss.write_index(index, INDEX_FILE)
-    print(f"[RAG] Indexed and saved: {file_path}")
+        for para in doc.paragraphs:
+            text += para.text + "\n"
+    return text
 
 
-# === Query text ===
-def query_text(query):
-    if index.ntotal == 0:
-        print("[RAG] No indexed data found.")
-        return "No results found."
+def chunk_text(text, chunk_size=700):
+    words = text.split()
+    return [" ".join(words[i:i + chunk_size]) for i in range(0, len(words), chunk_size)]
 
-    query_emb = embedding_model.encode([query])
-    D, I = index.search(np.array(query_emb, dtype="float32"), 3)
-    if len(I[0]) == 0:
-        return "No results found."
 
-    # Retrieve top matches
-    results = [documents[i] for i in I[0] if i < len(documents)]
-    context = " ".join(results)
+def add_files_to_knowledge_base(files):
+    for f in files:
+        save_path = os.path.join(UPLOAD_DIR, f.filename)
+        f.save(save_path)
 
-    prompt = f"You are Novacool Assistant. Use the following context to answer:\n\n{context}\n\nQuestion: {query}\nAnswer:"
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=300,
-        )
-        return response.choices[0].message.content
-    except Exception as e:
-        print(f"[RAG] Query failed: {e}")
-        return f"Error: {e}"
+
+def reindex_knowledge_base():
+    embedding_list = []
+    metadata_rows = []
+
+    for file_name in os.listdir(UPLOAD_DIR):
+        file_path = os.path.join(UPLOAD_DIR, file_name)
+        text = extract_text(file_path)
+        chunks = chunk_text(text)
+
+        for chunk in chunks:
+            emb = embedding_model.encode(chunk)
+            embedding_list.append(emb)
+            metadata_rows.append({"chunk_id": str(uuid4()), "text": chunk, "file": file_name})
+
+    # Save metadata
+    df = pd.DataFrame(metadata_rows)
+    df.to_csv(METADATA_FILE, index=False)
+
+    # Save embeddings to FAISS
+    vectors = np.vstack(embedding_list).astype("float32")
+    index = faiss.IndexFlatL2(vectors.shape[1])
+    index.add(vectors)
+    faiss.write_index(index, EMBEDDINGS_FILE)
+
+
+def retrieve_relevant_chunks(question, top_k=5):
+    if not os.path.exists(EMBEDDINGS_FILE) or not os.path.exists(METADATA_FILE):
+        return ""
+
+    df = pd.read_csv(METADATA_FILE)
+    index = faiss.read_index(EMBEDDINGS_FILE)
+
+    q_emb = embedding_model.encode(question).astype("float32")
+    distances, idx = index.search(np.expand_dims(q_emb, 0), top_k)
+
+    results = []
+    for i in idx[0]:
+        if 0 <= i < len(df):
+            results.append(df.iloc[i]["text"])
+
+    return "\n\n".join(results)
