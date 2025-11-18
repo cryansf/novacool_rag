@@ -87,3 +87,28 @@ def retrieve_relevant_chunks(question, top_k=5):
             results.append(df.iloc[i]["text"])
 
     return "\n\n".join(results)
+def answer_query(question):
+    """
+    Retrieves relevant knowledge base text and asks OpenAI for an answer.
+    """
+    context = retrieve_relevant_chunks(question)
+
+    if not context:
+        return "No indexed documents match this query yet — please upload and reindex."
+
+    prompt = f"""
+You are Novacool UEF's expert assistant. Using the context below,
+answer the user's question accurately and concisely.
+
+Context:
+{context}
+
+Question: {question}
+"""
+
+    response = openai.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": prompt}]
+    )
+
+    return response.choices[0].message.content.strip()
