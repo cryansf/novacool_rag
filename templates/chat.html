@@ -1,209 +1,200 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>Novacool AI Assistant</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>
-    :root {
-      --bg: #05060a;
-      --panel: #10121a;
-      --accent: #ff3b3b;
-      --accent2: #0051ff;
-      --text: #f9fafb;
-      --muted: #9ca3af;
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: radial-gradient(circle at 0 0,#15192b 0,#05060a 45%,#000000 100%);
-      color: var(--text);
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-    }
-    header {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 10px 16px;
-      background: linear-gradient(135deg,#0b1020,#141826);
-      border-bottom: 1px solid rgba(255,255,255,0.06);
-    }
-    header img {
-      height: 38px;
-    }
-    header h1 {
-      font-size: 18px;
-      margin: 0;
-    }
-    header small {
-      display: block;
-      font-size: 12px;
-      color: var(--muted);
-    }
-    #log {
-      flex: 1;
-      overflow-y: auto;
-      padding: 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-    .msg {
-      max-width: 80%;
-      padding: 10px 12px;
-      border-radius: 14px;
-      line-height: 1.5;
-      font-size: 14px;
-      white-space: pre-wrap;
-    }
-    .you {
-      align-self: flex-end;
-      background: linear-gradient(135deg,#ff3b3b,#ff7b3b);
-      color: #fff;
-    }
-    .bot {
-      align-self: flex-start;
-      background: #141826;
-      border: 1px solid rgba(255,255,255,0.06);
-    }
-    .meta {
-      font-size: 11px;
-      color: var(--muted);
-      margin-bottom: 4px;
-    }
-    form {
-      display: flex;
-      gap: 8px;
-      padding: 10px;
-      border-top: 1px solid rgba(255,255,255,0.08);
-      background: #05060aee;
-      backdrop-filter: blur(12px);
-    }
-    input[type="text"] {
-      flex: 1;
-      padding: 10px 12px;
-      border-radius: 999px;
-      border: 1px solid rgba(148,163,184,0.4);
-      background: #020309;
-      color: var(--text);
-      font-size: 14px;
-    }
-    input[type="text"]::placeholder {
-      color: #6b7280;
-    }
-    button {
-      border-radius: 999px;
-      border: none;
-      padding: 0 16px;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      background: linear-gradient(135deg,#ff3b3b,#ff7b3b);
-      color: #fff;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-    button:disabled {
-      opacity: 0.6;
-      cursor: default;
-    }
-    @media (max-width: 600px) {
-      header h1 { font-size: 16px; }
-      .msg { max-width: 90%; }
-    }
-  </style>
-</head>
-<body>
-  <header>
-    <img src="https://swfirefightingfoam.com/images/logo1-web.png" alt="Novacool Logo" />
-    <div>
-      <h1>Novacool AI Assistant</h1>
-      <small>Ask about UEF mix ratios, applications, certifications & environmental data.</small>
-    </div>
-  </header>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Novacool AI Chat</title>
 
-  <div id="log"></div>
-
-  <form id="chat-form">
-    <input
-      id="q"
-      type="text"
-      placeholder="Ask a question about Novacool UEF..."
-      autocomplete="off"
-    />
-    <button type="submit">
-      <span>Send</span> <span id="spinner" style="display:none;">⏳</span>
-    </button>
-  </form>
-
-  <script>
-    const log = document.getElementById("log");
-    const form = document.getElementById("chat-form");
-    const q = document.getElementById("q");
-    const spinner = document.getElementById("spinner");
-
-    function addMessage(role, text) {
-      const wrap = document.createElement("div");
-      const meta = document.createElement("div");
-      const bubble = document.createElement("div");
-
-      wrap.style.display = "flex";
-      wrap.style.flexDirection = "column";
-      wrap.style.alignItems = role === "you" ? "flex-end" : "flex-start";
-
-      meta.className = "meta";
-      meta.textContent = role === "you" ? "You" : "Novacool AI";
-
-      bubble.className = "msg " + (role === "you" ? "you" : "bot");
-      bubble.textContent = text;
-
-      wrap.appendChild(meta);
-      wrap.appendChild(bubble);
-      log.appendChild(wrap);
-
-      log.scrollTop = log.scrollHeight;
-      return bubble;
-    }
-
-    async function sendQuestion(text) {
-      spinner.style.display = "inline-block";
-      try {
-        const res = await fetch("/ask", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ question: text })
-        });
-
-        const data = await res.json();
-        if (data.answer) {
-          addMessage("bot", data.answer);
-        } else if (data.error) {
-          addMessage("bot", "Error: " + data.error);
-        } else {
-          addMessage("bot", "No answer returned.");
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #0b0b10;
+            margin: 0;
+            padding: 0;
+            color: white;
         }
-      } catch (err) {
-        addMessage("bot", "Network error: " + err.message);
-      } finally {
-        spinner.style.display = "none";
-      }
+        #chatbox {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        #messages {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+        }
+        .msg {
+            padding: 10px 14px;
+            border-radius: 12px;
+            margin: 8px 0;
+            max-width: 80%;
+        }
+        .user {
+            align-self: flex-end;
+            background: #1844ff;
+        }
+        .bot {
+            align-self: flex-start;
+            background: linear-gradient(135deg, #ff5a36, #aa0300);
+        }
+        #input-area {
+            display: flex;
+            padding: 12px;
+            background: #15151e;
+        }
+        #input-area input {
+            flex: 1;
+            padding: 12px;
+            border-radius: 8px;
+            border: none;
+            font-size: 16px;
+        }
+        #input-area button {
+            margin-left: 8px;
+            padding: 12px 18px;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 8px;
+            border: none;
+            color: white;
+            background: linear-gradient(135deg, #ff4300, #ca0000);
+        }
+
+        /* Floating bubble trigger */
+        #chat-bubble {
+            position: fixed;
+            bottom: 22px;
+            right: 22px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            cursor: pointer;
+            background: linear-gradient(135deg, #ff4300, #b30000);
+            box-shadow: 0 0 14px rgba(255,90,0,.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 999;
+        }
+
+        /* Animated pulsing fire glow */
+        @keyframes pulseFire {
+            0% { box-shadow: 0 0 10px rgba(255,80,0,.6); }
+            50% { box-shadow: 0 0 26px rgba(255,20,0,.9); }
+            100% { box-shadow: 0 0 10px rgba(255,80,0,.6); }
+        }
+        #chat-bubble {
+            animation: pulseFire 1.6s infinite ease-in-out;
+        }
+
+        /* Fullscreen modal */
+        #chat-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,.72);
+            display: none;
+            z-index: 1000;
+        }
+        #chat-window {
+            width: 420px;
+            height: 620px;
+            background: #0e0e13;
+            border-radius: 14px;
+            margin: auto;
+            margin-top: 50px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        #chat-header {
+            background: linear-gradient(135deg, #ff4100, #d00000);
+            padding: 12px;
+            font-size: 20px;
+            font-weight: bold;
+            text-align: center;
+        }
+        #closeChat {
+            position: absolute;
+            right: 16px;
+            top: 16px;
+            font-size: 26px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+
+<div id="chat-bubble">💬</div>
+
+<div id="chat-modal">
+    <div id="chat-window">
+        <div id="chat-header">🔥 Ask Novacool AI</div>
+        <div id="closeChat">✖</div>
+
+        <div id="chatbox">
+            <div id="messages"></div>
+            <div id="input-area">
+                <input id="userInput" placeholder="Ask anything..." />
+                <button id="sendBtn">Send</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const backend = "https://novacool-rag.onrender.com/chat";
+
+    const modal = document.getElementById("chat-modal");
+    const bubble = document.getElementById("chat-bubble");
+    const sendBtn = document.getElementById("sendBtn");
+    const input = document.getElementById("userInput");
+    const messagesDiv = document.getElementById("messages");
+
+    function addMessage(text, type) {
+        let div = document.createElement("div");
+        div.className = "msg " + type;
+        div.innerText = text;
+        messagesDiv.appendChild(div);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
     }
 
-    form.addEventListener("submit", (e) => {
-      e.preventDefault();
-      const text = q.value.trim();
-      if (!text) return;
-      addMessage("you", text);
-      q.value = "";
-      sendQuestion(text);
+    async function sendMessage() {
+        const text = input.value.trim();
+        if (!text) return;
+        addMessage(text, "user");
+        input.value = "";
+
+        try {
+            const res = await fetch(backend, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ query: text })
+            });
+            const data = await res.json();
+            addMessage(data.answer || "⚠ Error", "bot");
+        } catch {
+            addMessage("⚠ Server unreachable", "bot");
+        }
+    }
+
+    sendBtn.addEventListener("click", sendMessage);
+    input.addEventListener("keypress", e => {
+        if (e.key === "Enter") sendMessage();
     });
 
-    // Focus input on load (nice UX)
-    window.addEventListener("load", () => q.focus());
-  </script>
+    bubble.onclick = () => modal.style.display = "block";
+    document.getElementById("closeChat").onclick = () => modal.style.display = "none";
+
+    /* Auto open chat after scrolling politely */
+    let opened = false;
+    window.addEventListener("scroll", () => {
+        if (!opened && window.scrollY > 350) {
+            modal.style.display = "block";
+            opened = true;
+        }
+    });
+</script>
+
 </body>
 </html>
