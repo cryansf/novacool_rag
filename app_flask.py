@@ -1,90 +1,30 @@
-import os
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify
 from flask_cors import CORS
-from rag_pipeline import embed_document, query_rag, reindex_knowledge_base
+from rag_pipeline import answer_query
 
 app = Flask(__name__)
 CORS(app)
 
-# -------------------------------
-#  HEALTH CHECK (required by Render)
-# -------------------------------
-@app.route("/health")
+@app.get("/health")
 def health():
-    return "OK", 200
+    return {"status": "ok"}, 200
 
+@app.get("/")
+def index():
+    return jsonify({"message": "Novacool RAG backend running"}), 200
 
-# -------------------------------
-#  HOME → loads chat UI
-# -------------------------------
-@app.route("/")
-def home():
-    return render_template("chat.html")
-
-
-# -------------------------------
-#  CHAT ENDPOINT
-# -------------------------------
-@app.route("/chat", methods=["POST"])
+@app.post("/chat")
 def chat():
+    data = request.get_json()
+    if not data or "query" not in data:
+        return jsonify({"error": "Missing field 'query'"}), 400
+    
     try:
-        user_message = request.json.get("message", "")
-
-        # Run RAG pipeline
-        response = query_rag(user_message)
-
-        return jsonify({"reply": response})
+        result = answer_query(data["query"])
+        return jsonify({"answer": result})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
-# -------------------------------
-#  UPLOADER UI
-# -------------------------------
-@app.route("/upload")
-def upload_ui():
-    return render_template("uploader.html")
-
-
-# -------------------------------
-#  HANDLE DOC UPLOAD
-# -------------------------------
-@app.route("/upload", methods=["POST"])
-def upload_files():
-    try:
-        files = request.files.getlist("files")
-        for file in files:
-            save_path = os.path.join("uploads", file.filename)
-            file.save(save_path)
-
-        return jsonify({"status": "success", "message": "Files uploaded"})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-
-# -------------------------------
-#  REINDEX KNOWLEDGE BASE
-# -------------------------------
-@app.route("/reindex", methods=["POST"])
-def reindex():
-    try:
-        reindex_knowledge_base()
-        return jsonify({"status": "success", "message": "Reindex complete"})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-
-# -------------------------------
-#  DEV TEST ENDPOINT
-# -------------------------------
-@app.route("/test")
-def test():
-    return jsonify({"message": "Backend running"}), 200
-
-
-# -------------------------------
-#  MAIN
-# -------------------------------
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=10000)
