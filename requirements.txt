@@ -6,7 +6,7 @@ gunicorn==22.0.0
 # === OpenAI + Embedding Pipeline ===
 openai>=1.12.0
 tiktoken>=0.7.0
-sentence-transformers>=3.0.0
+sentence-transformers==2.6.1
 
 # === Vector Database ===
 faiss-cpu>=1.8.0
