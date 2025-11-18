@@ -393,3 +393,20 @@ if (window.__NOVACOOL_WIDGET_ACTIVE__) {
     }
   })();
 }
+// === ENABLE CLOSE BUTTON FOR CHAT WIDGET ===
+document.addEventListener("click", (e) => {
+    const widget = document.querySelector(".novacool-chat-widget");
+    const bubble = document.querySelector(".novacool-chat-bubble");
+
+    // Close when "X" button pressed
+    if (e.target.closest(".nc-close")) {
+        widget.style.display = "none";
+        bubble.style.display = "flex";
+    }
+
+    // Open when bubble pressed
+    if (e.target.closest(".novacool-chat-bubble")) {
+        widget.style.display = "flex";
+        bubble.style.display = "none";
+    }
+});
