@@ -1,3 +1,8 @@
+# === Vector Database ===
+faiss-cpu>=1.8.0
+numpy>=1.26.0
+pandas>=2.2.0
+
 # === Core Web Server ===
 flask==3.0.3
 flask-cors==4.0.0
@@ -7,11 +12,6 @@ gunicorn==22.0.0
 openai>=1.12.0
 tiktoken>=0.7.0
 sentence-transformers==2.6.1
-
-# === Vector Database ===
-faiss-cpu>=1.8.0
-numpy>=1.26.0
-pandas>=2.2.0
 
 # === Web Crawling & Text Extraction ===
 beautifulsoup4>=4.12.2
