@@ -1,30 +1,41 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
-from rag_pipeline import answer_query
+from rag_pipeline import answer_query   # <-- this is the only RAG function you need
 
 app = Flask(__name__)
 CORS(app)
 
-@app.get("/health")
-def health():
-    return {"status": "ok"}, 200
-
-@app.get("/")
+@app.route("/")
 def index():
-    return jsonify({"message": "Novacool RAG backend running"}), 200
+    return "<h2>🔥 Novacool RAG backend is running successfully</h2>"
 
-@app.post("/chat")
-def chat():
+# === Full-page chat UI ===
+@app.route("/chat", methods=["GET"])
+def chat_page():
+    return render_template("chat.html")
+
+# === JSON API endpoint used by widget + chat UI ===
+@app.route("/api/ask", methods=["POST"])
+def api_ask():
     data = request.get_json()
-    if not data or "query" not in data:
-        return jsonify({"error": "Missing field 'query'"}), 400
-    
+    question = data.get("question", "").strip()
+
+    if not question:
+        return jsonify({"answer": "Please enter a question."})
+
     try:
-        result = answer_query(data["query"])
-        return jsonify({"answer": result})
+        answer = answer_query(question)
+        return jsonify({"answer": answer})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"answer": f"Error: {str(e)}"})
+
+# === Health check for Render ===
+@app.route("/health", methods=["GET"])
+def health():
+    return jsonify({"status": "ok"}), 200
 
 
+# === REQUIRED ENTRYPOINT FOR GUNICORN ===
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+    # Local debug mode — Render ignores this when using Gunicorn
+    app.run(host="0.0.0.0", port=10000, debug=True)
