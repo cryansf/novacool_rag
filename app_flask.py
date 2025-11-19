@@ -1,19 +1,17 @@
 import os
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from rag_pipeline import RAGPipeline
+import rag_pipeline as rag
 
 app = Flask(__name__)
 CORS(app)
 
-# ==========================
-#   Load RAG Pipeline
-# ==========================
 DATA_DIR = os.path.join(os.getcwd(), "data")
-rag_pipeline = RAGPipeline(data_path=DATA_DIR)
+UPLOAD_DIR = os.path.join(os.getcwd(), "uploads")
+
 
 # ==========================
-#   HEALTH CHECK
+# HEALTH CHECK (Render)
 # ==========================
 @app.route("/health", methods=["GET"])
 def health():
@@ -21,21 +19,20 @@ def health():
 
 
 # ==========================
-#   CHAT ENDPOINT (WIDGET)
+# CHAT ENDPOINT (used by widget)
 # ==========================
 @app.route("/chat", methods=["POST"])
 def chat():
     try:
         data = request.get_json(force=True)
-        user_input = data.get("message", "").strip()
+        question = data.get("message", "").strip()
 
-        if not user_input:
+        if not question:
             return jsonify({"answer": "Please enter a question."})
 
-        # Retrieve RAG answer
-        answer = rag_pipeline.query(user_input)
+        # Call your RAG function directly
+        answer = rag.answer_query(question)
 
-        # Return JSON response expected by the widget
         return jsonify({"answer": answer})
 
     except Exception as e:
@@ -44,7 +41,7 @@ def chat():
 
 
 # ==========================
-#   UPLOAD PDF/DOCX FOR INGESTION
+# UPLOAD DOCUMENTS
 # ==========================
 @app.route("/upload", methods=["POST"])
 def upload():
@@ -53,7 +50,7 @@ def upload():
             return jsonify({"status": "error", "message": "no file uploaded"}), 400
 
         file = request.files["file"]
-        save_path = os.path.join(DATA_DIR, file.filename)
+        save_path = os.path.join(UPLOAD_DIR, file.filename)
         file.save(save_path)
 
         return jsonify({"status": "success", "file": file.filename})
@@ -64,12 +61,12 @@ def upload():
 
 
 # ==========================
-#   REINDEX KNOWLEDGE BASE
+# REINDEX KNOWLEDGE BASE
 # ==========================
 @app.route("/reindex", methods=["POST"])
 def reindex():
     try:
-        rag_pipeline.reindex(DATA_DIR)
+        rag.reindex_knowledge_base()
         return jsonify({"status": "success", "message": "Knowledge base rebuilt"})
 
     except Exception as e:
@@ -78,7 +75,7 @@ def reindex():
 
 
 # ==========================
-#   HOME
+# HOME
 # ==========================
 @app.route("/", methods=["GET"])
 def home():
@@ -86,7 +83,7 @@ def home():
 
 
 # ==========================
-#   MAIN ENTRY
+# MAIN ENTRY
 # ==========================
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
