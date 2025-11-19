@@ -1,41 +1,92 @@
-from flask import Flask, request, jsonify, render_template
+import os
+from flask import Flask, request, jsonify
 from flask_cors import CORS
-from rag_pipeline import answer_query   # <-- this is the only RAG function you need
+from rag_pipeline import RAGPipeline
 
 app = Flask(__name__)
 CORS(app)
 
-@app.route("/")
-def index():
-    return "<h2>🔥 Novacool RAG backend is running successfully</h2>"
+# ==========================
+#   Load RAG Pipeline
+# ==========================
+DATA_DIR = os.path.join(os.getcwd(), "data")
+rag_pipeline = RAGPipeline(data_path=DATA_DIR)
 
-# === Full-page chat UI ===
-@app.route("/chat", methods=["GET"])
-def chat_page():
-    return render_template("chat.html")
-
-# === JSON API endpoint used by widget + chat UI ===
-@app.route("/api/ask", methods=["POST"])
-def api_ask():
-    data = request.get_json()
-    question = data.get("question", "").strip()
-
-    if not question:
-        return jsonify({"answer": "Please enter a question."})
-
-    try:
-        answer = answer_query(question)
-        return jsonify({"answer": answer})
-    except Exception as e:
-        return jsonify({"answer": f"Error: {str(e)}"})
-
-# === Health check for Render ===
+# ==========================
+#   HEALTH CHECK
+# ==========================
 @app.route("/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok"}), 200
 
 
-# === REQUIRED ENTRYPOINT FOR GUNICORN ===
+# ==========================
+#   CHAT ENDPOINT (WIDGET)
+# ==========================
+@app.route("/chat", methods=["POST"])
+def chat():
+    try:
+        data = request.get_json(force=True)
+        user_input = data.get("message", "").strip()
+
+        if not user_input:
+            return jsonify({"answer": "Please enter a question."})
+
+        # Retrieve RAG answer
+        answer = rag_pipeline.query(user_input)
+
+        # Return JSON response expected by the widget
+        return jsonify({"answer": answer})
+
+    except Exception as e:
+        print("CHAT ERROR:", e)
+        return jsonify({"answer": "System error — please try again later."}), 500
+
+
+# ==========================
+#   UPLOAD PDF/DOCX FOR INGESTION
+# ==========================
+@app.route("/upload", methods=["POST"])
+def upload():
+    try:
+        if "file" not in request.files:
+            return jsonify({"status": "error", "message": "no file uploaded"}), 400
+
+        file = request.files["file"]
+        save_path = os.path.join(DATA_DIR, file.filename)
+        file.save(save_path)
+
+        return jsonify({"status": "success", "file": file.filename})
+
+    except Exception as e:
+        print("UPLOAD ERROR:", e)
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+# ==========================
+#   REINDEX KNOWLEDGE BASE
+# ==========================
+@app.route("/reindex", methods=["POST"])
+def reindex():
+    try:
+        rag_pipeline.reindex(DATA_DIR)
+        return jsonify({"status": "success", "message": "Knowledge base rebuilt"})
+
+    except Exception as e:
+        print("REINDEX ERROR:", e)
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+# ==========================
+#   HOME
+# ==========================
+@app.route("/", methods=["GET"])
+def home():
+    return jsonify({"message": "Novacool RAG backend running"}), 200
+
+
+# ==========================
+#   MAIN ENTRY
+# ==========================
 if __name__ == "__main__":
-    # Local debug mode — Render ignores this when using Gunicorn
-    app.run(host="0.0.0.0", port=10000, debug=True)
+    app.run(host="0.0.0.0", port=10000)
