@@ -16,24 +16,15 @@
         flex-direction: column;
     }
 
-    /* Header brand bar */
     .header {
         background: linear-gradient(90deg, #001e46, #b30000);
         padding: 14px 18px;
-        font-size: 20px;
+        font-size: 22px;
         font-weight: 600;
         text-align: center;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
         box-shadow: 0 0 12px rgba(255,0,0,0.4);
     }
-    .header img {
-        height: 32px;
-    }
 
-    /* Chat window */
     #chatContainer {
         flex: 1;
         overflow-y: auto;
@@ -63,7 +54,6 @@
         box-shadow: 0 0 10px rgba(255,0,0,0.25);
     }
 
-    /* Input area */
     .inputBar {
         display: flex;
         gap: 8px;
@@ -100,7 +90,7 @@
         transition: 0.25s;
     }
     .inputBar button:hover {
-        transform: scale(1.03);
+        transform: scale(1.04);
         box-shadow: 0 0 10px rgba(255,0,0,0.55);
     }
 </style>
@@ -108,21 +98,23 @@
 <body>
 
 <div class="header">
-    <img src="https://novacool.com/wp-content/uploads/2024/08/novacool-icon-fire.png" alt="">
     Novacool AI – Fire Science Assistant
 </div>
 
 <div id="chatContainer"></div>
 
 <div class="inputBar">
-    <input id="userInput" type="text" placeholder="Ask anything about Novacool UEF, firefighting, ratios, training…" />
+    <input id="userInput" type="text"
+        placeholder="Ask anything about Novacool UEF, firefighting, ratios, training…" />
     <button onclick="sendMessage()">Send</button>
 </div>
 
 <script>
     const chat = document.getElementById("chatContainer");
     const input = document.getElementById("userInput");
-    const API_URL = "/chat";
+
+    // FULL URL so widget works outside Render as well
+    const API_URL = "https://novacool-rag.onrender.com/chat";
 
     function appendMessage(role, text) {
         const div = document.createElement("div");
@@ -138,7 +130,6 @@
         appendMessage("user", question);
         input.value = "";
 
-        // Call backend
         try {
             const res = await fetch(API_URL, {
                 method: "POST",
@@ -147,18 +138,16 @@
             });
             const data = await res.json();
             appendMessage("ai", data.answer || "(No response)");
-        } catch {
-            appendMessage("ai", "⚠️ Backend unreachable – check deployment");
+        } catch (err) {
+            appendMessage("ai", "⚠ Backend unreachable — check deployment");
         }
         resizeFrame();
     }
 
-    // Enter key submits
     input.addEventListener("keydown", (e) => {
         if (e.key === "Enter") sendMessage();
     });
 
-    // Resize iframe so GetResponse container fits content
     function resizeFrame() {
         if (window.parent) {
             window.parent.postMessage(
