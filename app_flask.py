@@ -19,18 +19,20 @@ def health():
 
 
 # ==========================
-# CHAT ENDPOINT (used by widget)
+# CHAT ENDPOINT (Widget)
 # ==========================
 @app.route("/chat", methods=["POST"])
 def chat():
     try:
         data = request.get_json(force=True)
-        question = data.get("message", "").strip()
+
+        # Support both "message" and "input" keys
+        question = (data.get("message") or data.get("input") or "").strip()
 
         if not question:
             return jsonify({"answer": "Please enter a question."})
 
-        # Call your RAG function directly
+        # Ask RAG pipeline for answer
         answer = rag.answer_query(question)
 
         return jsonify({"answer": answer})
@@ -75,7 +77,7 @@ def reindex():
 
 
 # ==========================
-# HOME
+# HOME / DEFAULT ROOT
 # ==========================
 @app.route("/", methods=["GET"])
 def home():
@@ -83,7 +85,7 @@ def home():
 
 
 # ==========================
-# MAIN ENTRY
+# MAIN ENTRY POINT
 # ==========================
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
