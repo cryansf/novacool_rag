@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: novacool_rag
+    name: novacool_rag-app
     env: python
     plan: starter
     buildCommand: pip install --upgrade pip && pip install -r requirements.txt
