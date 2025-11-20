@@ -1,103 +1,58 @@
 import os
-import faiss
 import numpy as np
 import pandas as pd
-from uuid import uuid4
-from docx import Document
-from PyPDF2 import PdfReader
+import faiss
 from sentence_transformers import SentenceTransformer
 import openai
+from glob import glob
 
-openai.api_key = os.getenv("OPENAI_API_KEY")
-
-# ===== Correct persistent storage directories on your Render service =====
-UPLOAD_DIR = "/opt/render/project/src/uploads"
-DATA_DIR = "/opt/render/project/src/data"
-EMBEDDINGS_FILE = os.path.join(DATA_DIR, "embeddings.faiss")
+# === CONSTANT PATHS ===
+UPLOAD_DIR = "uploads"
+DATA_DIR = "data"
+EMBEDDINGS_FILE = os.path.join(DATA_DIR, "embeddings.index")
 METADATA_FILE = os.path.join(DATA_DIR, "metadata.csv")
 
-os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(DATA_DIR, exist_ok=True)
 
+# === EMBEDDING MODEL ===
 embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
 
 
-def extract_text(file_path):
-    text = ""
-    if file_path.endswith(".pdf"):
-        with open(file_path, "rb") as f:
-            reader = PdfReader(f)
-            for page in reader.pages:
-                chunk = page.extract_text()
-                if chunk:
-                    text += chunk + "\n"
-    elif file_path.endswith(".docx"):
-        doc = Document(file_path)
-        for para in doc.paragraphs:
-            if para.text.strip():
-                text += para.text + "\n"
-    return text
-
-
-def chunk_text(text, chunk_size=700):
-    words = text.split()
-    return [" ".join(words[i:i + chunk_size]) for i in range(0, len(words), chunk_size)]
-
-
-def add_files_to_knowledge_base(files):
-    for f in files:
-        save_path = os.path.join(UPLOAD_DIR, f.filename)
-        f.save(save_path)
-
-
-def reindex_knowledge_base():
-    embedding_list = []
-    metadata_rows = []
-
-    for file_name in os.listdir(UPLOAD_DIR):
-        file_path = os.path.join(UPLOAD_DIR, file_name)
-        text = extract_text(file_path)
-        chunks = chunk_text(text)
-
-        for chunk in chunks:
-            emb = embedding_model.encode(chunk)
-            embedding_list.append(emb)
-            metadata_rows.append({
-                "chunk_id": str(uuid4()),
-                "text": chunk,
-                "file": file_name
-            })
-
-    df = pd.DataFrame(metadata_rows)
-    df.to_csv(METADATA_FILE, index=False)
-
-    vectors = np.vstack(embedding_list).astype("float32")
-    index = faiss.IndexFlatL2(vectors.shape[1])
-    index.add(vectors)
-    faiss.write_index(index, EMBEDDINGS_FILE)
-
-
+# ==========================================================
+#  RAG — CHUNK RETRIEVAL
+# ==========================================================
 def retrieve_relevant_chunks(question, top_k=5):
     if not os.path.exists(EMBEDDINGS_FILE) or not os.path.exists(METADATA_FILE):
         return ""
+
     df = pd.read_csv(METADATA_FILE)
     index = faiss.read_index(EMBEDDINGS_FILE)
+
     q_emb = embedding_model.encode(question).astype("float32")
-    _, idx = index.search(np.expand_dims(q_emb, 0), top_k)
+    distances, idx = index.search(np.expand_dims(q_emb, 0), top_k)
+
     results = []
     for i in idx[0]:
         if 0 <= i < len(df):
             results.append(df.iloc[i]["text"])
+
     return "\n\n".join(results)
 
 
+# ==========================================================
+#  RAG — QUERY ANSWERING
+# ==========================================================
 def answer_query(question):
+    """
+    Retrieves relevant indexed context and asks OpenAI for an answer.
+    """
     context = retrieve_relevant_chunks(question)
+
     if not context:
-        return "No indexed documents match this query yet — please upload and reindex."
+        return "⚠️ No indexed documents match this query yet — please upload and reindex."
+
     prompt = f"""
-You are Novacool UEF's expert assistant. Using the context below,
-answer the user's question accurately and concisely.
+You are Novacool UEF's technical expert. Use only the context below to answer.
 
 Context:
 {context}
@@ -109,3 +64,43 @@ Question: {question}
         messages=[{"role": "user", "content": prompt}]
     )
     return response.choices[0].message.content.strip()
+
+
+# ==========================================================
+#  RAG — REINDEX (RESTORES BACKEND)
+# ==========================================================
+def run_reindex():
+    """
+    Rebuilds FAISS embeddings based on all documents in /uploads.
+    """
+    os.makedirs(DATA_DIR, exist_ok=True)
+
+    files = glob(os.path.join(UPLOAD_DIR, "*"))
+    if not files:
+        return "⚠️ No files found in uploads — please upload first."
+
+    chunks = []
+    sources = []
+
+    for file in files:
+        try:
+            with open(file, "r", errors="ignore") as f:
+                text = f.read()
+                chunks.append(text)
+                sources.append(os.path.basename(file))
+        except Exception:
+            continue
+
+    if not chunks:
+        return "⚠️ Upload files could not be read."
+
+    embeddings = embedding_model.encode(chunks).astype("float32")
+
+    index = faiss.IndexFlatL2(embeddings.shape[1])
+    index.add(embeddings)
+    faiss.write_index(index, EMBEDDINGS_FILE)
+
+    df = pd.DataFrame({"text": chunks, "source": sources})
+    df.to_csv(METADATA_FILE, index=False)
+
+    return f"Reindex complete — {len(chunks)} documents processed."
