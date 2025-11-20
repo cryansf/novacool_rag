@@ -11,7 +11,7 @@ UPLOAD_DIR = os.path.join(os.getcwd(), "uploads")
 
 
 # ==========================
-# HEALTH CHECK (Render)
+# HEALTH CHECK
 # ==========================
 @app.route("/health", methods=["GET"])
 def health():
@@ -19,19 +19,18 @@ def health():
 
 
 # ==========================
-# CHAT ENDPOINT (WIDGET)
+# CHAT ENDPOINT (Widget)
 # ==========================
 @app.route("/chat", methods=["POST"])
 def chat():
     try:
         data = request.get_json(force=True)
-
-        # Log the payload so we can see exactly what the widget sends
         print("🔥 RECEIVED PAYLOAD:", data)
 
-        # Extract the question regardless of which JSON key is used
+        # The widget sends {"query": "..."} — this MUST be the first priority
         question = (
-            (data.get("question") if isinstance(data, dict) else None)
+            (data.get("query") if isinstance(data, dict) else None)
+            or (data.get("question") if isinstance(data, dict) else None)
             or (data.get("message") if isinstance(data, dict) else None)
             or (data.get("input") if isinstance(data, dict) else None)
             or (data.get("text") if isinstance(data, dict) else None)
@@ -49,8 +48,9 @@ def chat():
         print("CHAT ERROR:", e)
         return jsonify({"answer": "System error — please try again later."}), 500
 
+
 # ==========================
-# UPLOAD DOCUMENTS
+# UPLOAD DOCUMENTS FOR KB
 # ==========================
 @app.route("/upload", methods=["POST"])
 def upload():
@@ -92,7 +92,7 @@ def home():
 
 
 # ==========================
-# ENTRY POINT
+# MAIN ENTRY
 # ==========================
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
