@@ -26,11 +26,16 @@ def chat():
     try:
         data = request.get_json(force=True)
 
-        # Accept ANY key the widget may send
+        # Log the payload so we can see exactly what the widget sends
+        print("🔥 RECEIVED PAYLOAD:", data)
+
+        # Extract the question regardless of which JSON key is used
         question = (
-            data.get("question")
-            or data.get("message")
-            or data.get("input")
+            (data.get("question") if isinstance(data, dict) else None)
+            or (data.get("message") if isinstance(data, dict) else None)
+            or (data.get("input") if isinstance(data, dict) else None)
+            or (data.get("text") if isinstance(data, dict) else None)
+            or (data.get("prompt") if isinstance(data, dict) else None)
             or ""
         ).strip()
 
@@ -43,7 +48,6 @@ def chat():
     except Exception as e:
         print("CHAT ERROR:", e)
         return jsonify({"answer": "System error — please try again later."}), 500
-
 
 # ==========================
 # UPLOAD DOCUMENTS
