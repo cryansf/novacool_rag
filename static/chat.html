@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Novacool AI Assistant</title>
+  <style>
+    body { margin:0; font-family:system-ui; background:#0b0e11; color:white; }
+    .container {
+      display:flex; flex-direction:column;
+      height:100vh; padding:20px;
+      box-sizing:border-box;
+      background:#0b0e11;
+    }
+    .title {
+      font-size:24px; font-weight:700;
+      background:linear-gradient(90deg,#001a63,#c20000);
+      padding:16px; border-radius:10px;
+      text-align:center;
+      margin-bottom:16px;
+    }
+    .message { 
+      padding:12px; border-radius:8px;
+      margin-bottom:10px;
+    }
+    .user { background:#0056d6; align-self:flex-start; }
+    .bot { background:#1b1b1b; border:1px solid #ff2f2f; align-self:flex-start; }
+    .inputArea {
+      margin-top:auto; display:flex; gap:8px;
+    }
+    input {
+      flex:1; padding:12px; border-radius:8px;
+      background:#1b1b1b; border:1px solid #ff2f2f;
+      color:white;
+    }
+    button {
+      padding:12px 20px;
+      border-radius:8px; border:none;
+      cursor:pointer; color:white;
+      background:#b00000;
+    }
+    button:hover { background:#d80000; }
+  </style>
+</head>
+
+<body>
+<div class="container">
+  <div class="title">Novacool AI – Fire Science Assistant</div>
+
+  <div id="chatBox"></div>
+
+  <div class="inputArea">
+    <input id="userInput" placeholder="Ask anything about Novacool UEF, firefighting, ratios, training." />
+    <button onclick="sendMessage()">Send</button>
+  </div>
+</div>
+
+<script>
+const API = "https://novacool-rag.onrender.com/chat";
+const box = document.getElementById("chatBox");
+const input = document.getElementById("userInput");
+
+function addMessage(text, cls) {
+  let div = document.createElement("div");
+  div.className = "message " + cls;
+  div.textContent = text;
+  box.append(div);
+  box.scrollTop = box.scrollHeight;
+}
+
+async function sendMessage() {
+  let q = input.value.trim();
+  if (!q) return;
+
+  addMessage(q, "user");
+  input.value = "";
+
+  try {
+    let r = await fetch(API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: q })
+    });
+
+    let data = await r.json();
+    addMessage(data.answer ?? "⚠ No response received.", "bot");
+  } catch (e) {
+    addMessage("⚠ Network error — backend unreachable.", "bot");
+  }
+}
+</script>
+</body>
+</html>
