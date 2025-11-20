@@ -1,105 +1,105 @@
-/* ============================================================
-   Novacool AI Widget Loader – Working Production Build
-   ============================================================ */
-
+/* ============================================================================
+   NOVACOOL AI — FLOATING CHAT WIDGET LOADER
+   ============================================================================ */
 (function () {
-    // ============================================================
-    // URL OF THE WIDGET UI (must be the exact HTML file we fixed)
-    // ============================================================
-    const IFRAME_URL = "https://novacool-rag.onrender.com/static/widget.html";
+  const IFRAME_URL = "https://novacool-rag.onrender.com/static/widget.html";
 
-    // ============================================================
-    // STYLE INJECTION
-    // ============================================================
-    const style = document.createElement("style");
-    style.innerHTML = `
-        #novacool-bubble {
-            position: fixed;
-            bottom: 22px;
-            right: 22px;
-            width: 64px;
-            height: 64px;
-            border-radius: 50%;
-            background: linear-gradient(45deg, #001e46, #b30000);
-            box-shadow: 0 0 16px rgba(255,0,0,0.6);
-            cursor: pointer;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            transition: 0.25s;
-            z-index: 999999;
-        }
-        #novacool-bubble:hover { transform: scale(1.08); }
+  /* -------------------- Create Bubble -------------------- */
+  const bubble = document.createElement("div");
+  bubble.id = "novaBubble";
+  bubble.style.cssText = `
+    position: fixed;
+    bottom: 22px;
+    right: 22px;
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    cursor: pointer;
+    z-index: 999999;
+    background: url("https://novacool.com/wp-content/uploads/2024/04/NovacoolFlame-Icon.png") center/cover no-repeat;
+    box-shadow: 0 0 18px rgba(255, 60, 0, 0.6);
+    animation: firePulse 2.8s infinite ease-in-out;
+  `;
 
-        #novacool-frame-container {
-            position: fixed;
-            bottom: 110px;
-            right: 22px;
-            width: 420px;
-            height: 570px;
-            background: black;
-            border: 3px solid #b30000;
-            border-radius: 16px;
-            overflow: hidden;
-            opacity: 0;
-            display: none;
-            transition: opacity 0.35s ease;
-            z-index: 999998;
-        }
-        #novacool-frame-container.open {
-            display: block;
-            opacity: 1;
-        }
+  const pulse = document.createElement("style");
+  pulse.innerHTML = `
+    @keyframes firePulse {
+      0% { box-shadow: 0 0 10px rgba(255,60,0,0.4); }
+      50% { box-shadow: 0 0 27px rgba(255,60,0,0.9); }
+      100% { box-shadow: 0 0 10px rgba(255,60,0,0.4); }
+    }
+  `;
+  document.head.appendChild(pulse);
+  document.body.appendChild(bubble);
 
-        @media (max-width: 620px) {
-            #novacool-frame-container {
-                bottom: 0;
-                right: 0;
-                width: 100vw;
-                height: 100vh;
-                border-radius: 0;
-                border: none;
-            }
-        }
-    `;
-    document.head.appendChild(style);
+  /* -------------------- Create Iframe -------------------- */
+  const frame = document.createElement("iframe");
+  frame.id = "novaFrame";
+  frame.src = "";
+  frame.allow = "clipboard-read; clipboard-write";
+  frame.style.cssText = `
+    position: fixed;
+    bottom: 105px;
+    right: 22px;
+    width: 380px;
+    height: 540px;
+    border-radius: 16px;
+    border: 2px solid #ff5722;
+    background: #000;
+    display: none;
+    z-index: 999999;
+  `;
+  document.body.appendChild(frame);
 
-    // ============================================================
-    // ELEMENT CREATION
-    // ============================================================
-    const bubble = document.createElement("div");
-    bubble.id = "novacool-bubble";
-    bubble.innerHTML = `<img src="https://novacool.com/wp-content/uploads/2024/08/novacool-icon-fire.png" style="width:36px;">`;
+  /* -------------------- Open / Close Logic -------------------- */
+  let isOpen = false;
 
-    const frameBox = document.createElement("div");
-    frameBox.id = "novacool-frame-container";
+  function openChat() {
+    if (!isOpen) {
+      frame.style.display = "block";
+      frame.src = IFRAME_URL;
+      isOpen = true;
+    }
+  }
 
-    const iframe = document.createElement("iframe");
-    iframe.src = IFRAME_URL;
-    iframe.style = "width:100%; height:100%; border:none;";
-    frameBox.appendChild(iframe);
+  function closeChat() {
+    frame.style.display = "none";
+    isOpen = false;
+  }
 
-    document.body.appendChild(bubble);
-    document.body.appendChild(frameBox);
+  bubble.addEventListener("click", () => {
+    if (isOpen) closeChat();
+    else openChat();
+  });
 
-    // ============================================================
-    // OPEN / CLOSE BEHAVIOR
-    // ============================================================
-    bubble.addEventListener("click", () => {
-        const open = frameBox.classList.contains("open");
-        if (open) {
-            frameBox.classList.remove("open");
-        } else {
-            frameBox.classList.add("open");
-        }
-    });
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && isOpen) closeChat();
+  });
 
-    // ============================================================
-    // DYNAMIC HEIGHT SUPPORT (for iframe resize reporting)
-    // ============================================================
-    window.addEventListener("message", (event) => {
-        if (event.data && event.data.height) {
-            frameBox.style.height = event.data.height + "px";
-        }
-    });
+  /* -------------------- Optional Auto-Open -------------------- */
+  let scrolled = false;
+  window.addEventListener("scroll", () => {
+    if (!scrolled) {
+      scrolled = true;
+      setTimeout(openChat, 400);
+    }
+  });
+
+  /* -------------------- Mobile Responsiveness -------------------- */
+  function adjustForMobile() {
+    if (window.innerWidth < 600) {
+      frame.style.width = "92%";
+      frame.style.height = "78%";
+      frame.style.right = "4%";
+      frame.style.bottom = "90px";
+    } else {
+      frame.style.width = "380px";
+      frame.style.height = "540px";
+      frame.style.right = "22px";
+      frame.style.bottom = "105px";
+    }
+  }
+
+  adjustForMobile();
+  window.addEventListener("resize", adjustForMobile);
 })();
