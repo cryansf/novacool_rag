@@ -47,3 +47,20 @@
   height: 100%;
   border: none;
 }
+#novacool-chat-panel {
+    display: none;
+    opacity: 0;
+    transition: opacity .25s ease;
+}
+
+#novacool-chat-panel.open {
+    display: block;
+    opacity: 1;
+}
+
+#novacool-frame {
+    width: 100%;
+    height: 100%;
+    border: none;
+}
+
