@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Novacool AI — Upload Docs</title>
+  <style>
+    body { font-family: Arial; margin: 40px; }
+    #log { white-space: pre-line; margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <h2>📄 Upload PDFs / DOCXs to the Knowledge Base</h2>
+
+  <input type="file" id="fileInput" multiple>
+  <button onclick="upload()">Upload</button>
+
+  <div id="log"></div>
+
+<script>
+async function upload() {
+  const files = document.getElementById("fileInput").files;
+  if (!files.length) return alert("Pick files first!");
+
+  const log = document.getElementById("log");
+  log.textContent = "Uploading...\n";
+
+  for (const file of files) {
+    const data = new FormData();
+    data.append("file", file);
+
+    const res = await fetch("/upload", { method: "POST", body: data });
+    const txt = await res.text();
+    log.textContent += file.name + ": " + txt + "\n";
+  }
+
+  log.textContent += "\n➡️ Upload complete — click Reindex next!";
+}
+</script>
+</body>
+</html>

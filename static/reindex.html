@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Novacool AI — Reindex KB</title>
+  <style>
+    body { font-family: Arial; margin: 40px; }
+  </style>
+</head>
+<body>
+  <h2>🔄 Reindex Knowledge Base</h2>
+  <button onclick="run()">Start Reindexing</button>
+
+  <p id="out"></p>
+
+<script>
+async function run() {
+  document.getElementById("out").textContent = "Reindexing...";
+  const res = await fetch("/reindex", { method: "POST" });
+  const text = await res.text();
+  document.getElementById("out").textContent = text;
+}
+</script>
+</body>
+</html>

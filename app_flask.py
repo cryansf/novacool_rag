@@ -1,19 +1,28 @@
 import os
-from flask import Flask, request, jsonify, send_from_directory
+import json
+import requests
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 from rag_pipeline import answer_query, run_reindex
 
 app = Flask(__name__)
 CORS(app)
 
+UPLOAD_DIR = "uploads"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-# ---------- HEALTH ----------
+
+# ==========================
+# HEALTH CHECK
+# ==========================
 @app.route("/health")
 def health():
     return "OK", 200
 
 
-# ---------- CHAT (QUESTION ANSWERING) ----------
+# ==========================
+# MAIN CHAT ENDPOINT
+# ==========================
 @app.route("/chat", methods=["POST"])
 def chat_api():
     try:
@@ -22,55 +31,48 @@ def chat_api():
             return jsonify({"error": "No question provided"}), 400
 
         answer = answer_query(question)
-        return jsonify({"answer": answer}), 200
+        return jsonify({"answer": answer})
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": f"Backend error: {e}"}), 500
 
 
-# ---------- FILE UPLOAD ----------
+# ==========================
+# UPLOAD DOCUMENTS
+# ==========================
 @app.route("/upload", methods=["POST"])
-def upload_api():
-    try:
-        if "files" not in request.files:
-            return jsonify({"error": "No files uploaded"}), 400
+def upload_files():
+    """Save uploaded files into /uploads directory."""
+    if "files" not in request.files:
+        return jsonify({"error": "No files received"}), 400
 
-        for f in request.files.getlist("files"):
-            save_path = os.path.join("uploads", f.filename)
-            f.save(save_path)
+    for f in request.files.getlist("files"):
+        f.save(os.path.join(UPLOAD_DIR, f.filename))
 
-        return jsonify({"status": "uploaded"}), 200
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    return jsonify({"message": "Files uploaded successfully."})
 
 
-# ---------- REINDEX ----------
+# ==========================
+# REBUILD EMBEDDINGS
+# ==========================
 @app.route("/reindex", methods=["POST"])
-def reindex_api():
-    try:
-        result = run_reindex()         # ⚡ calls the real function in rag_pipeline.py
-        return jsonify({"status": result}), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+def reindex_route():
+    """Rebuild FAISS + metadata from uploaded files."""
+    message = run_reindex()
+    return jsonify({"message": message})
 
 
-# ---------- LIST FILES ----------
+# ==========================
+# LIST STORED FILES
+# ==========================
 @app.route("/files", methods=["GET"])
-def list_files_api():
-    try:
-        return jsonify(os.listdir("uploads")), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+def list_files():
+    files = os.listdir(UPLOAD_DIR)
+    return jsonify({"files": files})
 
 
-# ---------- STATIC UPLOADER DASHBOARD ----------
-@app.route("/uploader")
-def uploader_page():
-    return send_from_directory("static", "upload.html")
-
-
-# ---------- SERVER ENTRY ----------
+# ==========================
+# MAIN ENTRY
+# ==========================
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=10000)
