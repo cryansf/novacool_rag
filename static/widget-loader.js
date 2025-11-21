@@ -1,5 +1,6 @@
 /* ===========================================
    NOVACOOL FIRE-GLOW CHAT WIDGET LOADER
+   (Bubble opens panel and stays open until X pressed)
 =========================================== */
 (function () {
 
@@ -9,7 +10,7 @@
     style.href = "https://novacool-rag.onrender.com/static/widget.css";
     document.head.appendChild(style);
 
-    /* ---- Create Widget Container (bubble + panel) ---- */
+    /* ---- Build UI container (bubble + panel) ---- */
     const html = `
         <div id="novacool-bubble">
             <img src="https://novacool.com/wp-content/uploads/2024/06/novacool-fire-logo.png"
@@ -18,6 +19,7 @@
         </div>
 
         <div id="novacool-chat-panel">
+            <div id="novacool-close">✕</div>
             <iframe id="novacool-frame"
                 src="https://novacool-rag.onrender.com/chat"
                 loading="lazy"></iframe>
@@ -29,15 +31,9 @@
     container.innerHTML = html;
     document.body.appendChild(container);
 
-    /* ---- Load chat UI script ---- */
+    /* ---- Load chat UI behavior ---- */
     const script = document.createElement("script");
     script.src = "https://novacool-rag.onrender.com/static/chat-ui.js";
     script.defer = true;
     document.body.appendChild(script);
-
-    /* ---- Bubble Click → Open Panel ---- */
-    document.body.addEventListener("click", (e) => {
-        if (!e.target.closest("#novacool-bubble")) return;
-        document.getElementById("novacool-chat-panel")?.classList.add("open");
-    });
 })();

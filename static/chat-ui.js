@@ -1,11 +1,23 @@
-/* NOVACOOL Chat UI — React Webapp Loader */
+/* ===========================================
+   NOVACOOL CHAT UI — OPEN/CLOSE & FOCUS
+=========================================== */
 
-const container = document.getElementById("novacool-window");
-if (container) {
-  container.innerHTML = `
-    <iframe
-      src="https://novacool-rag.onrender.com/chat"
-      style="width:100%; height:100%; border:none;"
-    ></iframe>
-  `;
-}
+document.addEventListener("click", function (e) {
+    const bubble = e.target.closest("#novacool-bubble");
+    const closeBtn = e.target.closest("#novacool-close");
+    const panel = document.getElementById("novacool-chat-panel");
+
+    if (!panel) return;
+
+    // Open panel
+    if (bubble) {
+        panel.classList.add("open");
+        return;
+    }
+
+    // Close panel
+    if (closeBtn) {
+        panel.classList.remove("open");
+        return;
+    }
+});
