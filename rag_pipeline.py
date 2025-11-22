@@ -1,92 +1,62 @@
 import os
-import json
 import numpy as np
+import pandas as pd
 import faiss
-import fitz  # PyMuPDF
-from bs4 import BeautifulSoup
 from sentence_transformers import SentenceTransformer
+from glob import glob
 
 UPLOAD_DIR = "uploads"
 DATA_DIR = "data"
-INDEX_PATH = os.path.join(DATA_DIR, "index/faiss.index")
-MANIFEST_PATH = os.path.join(DATA_DIR, "index/manifest.json")
-EMBED_MODEL = "all-MiniLM-L6-v2"
+EMBEDDINGS_FILE = os.path.join(DATA_DIR, "embeddings.index")
+METADATA_FILE = os.path.join(DATA_DIR, "metadata.csv")
 
+os.makedirs(DATA_DIR, exist_ok=True)
 os.makedirs(UPLOAD_DIR, exist_ok=True)
-os.makedirs(os.path.join(DATA_DIR, "index"), exist_ok=True)
+
+embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
 
 
-class RAGPipeline:
-    def __init__(self):
-        self.model = SentenceTransformer(EMBED_MODEL)
-        self.index = None
-        self.documents = []
+def retrieve_relevant_chunks(question, top_k=5):
+    """Return best-matching text chunks, or empty list if no index exists."""
+    if not os.path.exists(EMBEDDINGS_FILE) or not os.path.exists(METADATA_FILE):
+        return []
 
-        if os.path.exists(INDEX_PATH) and os.path.exists(MANIFEST_PATH):
-            self._load_index()
+    df = pd.read_csv(METADATA_FILE)
+    index = faiss.read_index(EMBEDDINGS_FILE)
 
-    # ------------------------------
-    # Load FAISS index + manifest
-    # ------------------------------
-    def _load_index(self):
-        self.index = faiss.read_index(INDEX_PATH)
-        with open(MANIFEST_PATH, "r") as f:
-            self.documents = json.load(f)
+    q_emb = embedding_model.encode(question).astype("float32")
+    distances, idx = index.search(np.expand_dims(q_emb, 0), top_k)
 
-    # ------------------------------
-    # Save FAISS index + manifest
-    # ------------------------------
-    def _save_index(self):
-        faiss.write_index(self.index, INDEX_PATH)
-        with open(MANIFEST_PATH, "w") as f:
-            json.dump(self.documents, f, indent=2)
+    results = []
+    for i in idx[0]:
+        if 0 <= i < len(df):
+            results.append({"text": df.iloc[i]["text"], "source": df.iloc[i]["source"]})
+    return results
 
-    # ------------------------------
-    # Extract text from PDF or HTML
-    # ------------------------------
-    def extract_text(self, file_path):
-        text = ""
 
-        if file_path.lower().endswith(".pdf"):
-            with fitz.open(file_path) as pdf:
-                for page in pdf:
-                    text += page.get_text()
+def reindex_all_files():
+    """Rebuilds the embeddings index using all documents in /uploads."""
+    files = glob(os.path.join(UPLOAD_DIR, "*"))
+    if not files:
+        return "⚠ No files in uploads — please upload first."
 
-        else:  # HTML / DOCX converted to HTML
-            with open(file_path, "r", errors="ignore") as f:
-                soup = BeautifulSoup(f.read(), "html.parser")
-                text = soup.get_text(separator=" ")
+    chunks = []
+    sources = []
+    for file in files:
+        try:
+            with open(file, "r", errors="ignore") as f:
+                text = f.read()
+                chunks.append(text)
+                sources.append(os.path.basename(file))
+        except Exception:
+            continue
 
-        return text
+    embeddings = embedding_model.encode(chunks).astype("float32")
+    index = faiss.IndexFlatL2(embeddings.shape[1])
+    index.add(embeddings)
+    faiss.write_index(index, EMBEDDINGS_FILE)
 
-    # ------------------------------
-    # Embed + store document
-    # ------------------------------
-    def embed_and_store(self, filename):
-        file_path = os.path.join(UPLOAD_DIR, filename)
-        text = self.extract_text(file_path)
-        chunks = [text[i:i + 500] for i in range(0, len(text), 500)]
+    df = pd.DataFrame({"text": chunks, "source": sources})
+    df.to_csv(METADATA_FILE, index=False)
 
-        embeddings = self.model.encode(chunks)
-
-        if self.index is None:
-            self.index = faiss.IndexFlatL2(embeddings.shape[1])
-
-        self.index.add(np.array(embeddings).astype("float32"))
-
-        self.documents.extend(chunks)
-        self._save_index()
-
-        return len(chunks)
-
-    # ------------------------------
-    # Query search
-    # ------------------------------
-    def search(self, query, k=5):
-        if self.index is None or len(self.documents) == 0:
-            return []
-
-        query_vec = self.model.encode([query]).astype("float32")
-        scores, ids = self.index.search(query_vec, k)
-
-        return [self.documents[i] for i in ids[0] if i < len(self.documents)]
+    return f"Reindex complete — {len(chunks)} files processed."
