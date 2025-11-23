@@ -1,72 +1,79 @@
 import os
-import requests
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
-
-from rag_pipeline import answer_query, run_reindex
-
-UPLOAD_DIR = "uploads"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+from rag_pipeline import search, reindex_all
 
 app = Flask(__name__)
 CORS(app)
 
-
-# ------------------------ HEALTH ------------------------
+# ----------------------------
+# 🔍 HEALTH CHECK
+# ----------------------------
 @app.route("/health")
 def health():
     return "OK", 200
 
 
-# ------------------------ CHAT API ------------------------
+# ----------------------------
+# 🤖 CHAT ENDPOINT
+# ----------------------------
 @app.route("/chat", methods=["POST"])
 def chat_api():
     try:
-        data = request.json
+        data = request.get_json(silent=True) or {}
         question = data.get("question", "").strip()
+
         if not question:
-            return jsonify({"answer": "⚠️ No question received"}), 200
+            return jsonify({"answer": "⚠️ Please enter a question."})
 
-        answer = answer_query(question)
-        return jsonify({"answer": answer}), 200
+        chunks = search(question)  # <<< IMPORTANT — no top_k parameter
+        answer = chunks.get("answer", None)
+        error = chunks.get("error", None)
 
+        if error:
+            return jsonify({"answer": f"⚠️ Backend error:\n{error}"})
+
+        return jsonify({"answer": answer})
     except Exception as e:
-        return jsonify({"answer": f"⚠️ Backend error: {e}"}), 200
+        return jsonify({"answer": f"⚠️ Fatal backend error:\n{str(e)}"})
 
 
-# ------------------------ UPLOADER PAGE ------------------------
-@app.route("/uploader")
-def uploader_page():
-    return send_from_directory("static", "uploader.html")
+# ----------------------------
+# 📤 UPLOAD FILES
+# ----------------------------
+UPLOAD_DIR = "uploads"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-
-# ------------------------ FILE UPLOAD ------------------------
 @app.route("/upload", methods=["POST"])
-def upload_files():
-    files = request.files.getlist("files")
-    if not files:
-        return jsonify({"message": "⚠️ No files received"}), 400
+def upload_route():
+    if "file" not in request.files:
+        return jsonify({"message": "No file uploaded"}), 400
 
-    for f in files:
-        f.save(os.path.join(UPLOAD_DIR, f.filename))
-
-    return jsonify({"message": f"{len(files)} file(s) uploaded successfully"}), 200
-
-
-# ------------------------ FILE LIST ------------------------
-@app.route("/files")
-def list_uploaded_files():
-    items = os.listdir(UPLOAD_DIR)
-    return jsonify({"files": items})
+    file = request.files["file"]
+    save_path = os.path.join(UPLOAD_DIR, file.filename)
+    file.save(save_path)
+    return jsonify({"message": f"Uploaded: {file.filename}"})
 
 
-# ------------------------ REINDEX ------------------------
+# ----------------------------
+# 🔁 REINDEX DOCUMENTS
+# ----------------------------
 @app.route("/reindex", methods=["POST"])
-def reindex_api():
-    msg = run_reindex()
-    return jsonify({"message": msg})
+def reindex_route():
+    try:
+        msg = reindex_all()
+        return jsonify({"message": msg})
+    except Exception as e:
+        return jsonify({"message": f"Reindex error: {str(e)}"}), 500
 
 
-# ------------------------ LAUNCH ------------------------
+# ----------------------------
+# 🔗 STATIC FILES (chat UI)
+# ----------------------------
+@app.route("/static/<path:filename>")
+def static_files(filename):
+    return send_from_directory("static", filename)
+
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
