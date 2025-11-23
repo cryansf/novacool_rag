@@ -1,83 +1,53 @@
-/* ===========================================
-   NOVACOOL FIRE-GLOW CHAT WIDGET — FINAL CSS
-=========================================== */
-
-#novacool-widget {
-    position: fixed;
-    bottom: 26px;
-    right: 26px;
-    z-index: 999999;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-}
-
-/* 🔥 Bubble Button */
 #novacool-bubble {
-    width: 62px;
-    height: 62px;
-    cursor: pointer;
-    border-radius: 50%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    background: radial-gradient(circle, #ff1e00, #7a0000);
-    box-shadow: 0 0 20px rgba(255,30,0,0.75), 0 0 40px rgba(255,80,0,0.45);
-    animation: firePulse 2.1s infinite alternate ease-in-out;
+  position: fixed;
+  right: 26px;
+  bottom: 26px;
+  width: 60px;
+  height: 60px;
+  cursor: pointer;
+  background: #7a0000;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  box-shadow: 0 0 18px rgba(255,0,0,.6);
 }
 
-/* 🔥 Fire pulse */
-@keyframes firePulse {
-    0% { box-shadow: 0 0 12px rgba(255,80,0,.55); }
-    100% { box-shadow: 0 0 40px rgba(255,0,0,.9); }
+#novacool-chat-box {
+  position: fixed;
+  right: 26px;
+  bottom: 100px;
+  width: 360px;
+  height: 480px;
+  background: white;
+  display: none;
+  flex-direction: column;
+  border-radius: 10px;
+  box-shadow: 0 0 18px rgba(0,0,0,.4);
+  overflow: hidden;
+  z-index: 999999;
 }
 
-/* 🪟 Chat panel */
-#novacool-chat-panel {
-    width: 410px;
-    height: 620px;          /* ⬅ bigger */
-    background: #0f1a27;
-    border-radius: 14px;
-    overflow: hidden;
-    position: absolute;
-    bottom: 80px;
-    right: 0;
-    display: none;
-    opacity: 0;
-    transition: opacity .28s ease;
-    box-shadow: 0 0 26px rgba(0,0,0,.50);
+#nc-header {
+  background: #7a0000;
+  color: white;
+  padding: 10px;
+  display: flex;
+  justify-content: space-between;
 }
 
-#novacool-chat-panel.open {
-    display: block;
-    opacity: 1;
+#nc-body {
+  flex: 1;
+  padding: 10px;
+  overflow-y: auto;
 }
 
-/* ❌ Close button */
-#novacool-close {
-    position: absolute;
-    top: 10px;
-    right: 12px;
-    font-size: 22px;
-    color: #ffffff;
-    cursor: pointer;
-    z-index: 2;
+#nc-input {
+  border: none;
+  padding: 12px;
+  border-top: 1px solid #ccc;
+  outline: none;
 }
 
-/* 🪟 iframe */
-#novacool-frame {
-    width: 100%;
-    height: 100%;
-    border: none;
-    display: block;
-}
-
-/* 📱 Mobile */
-@media (max-width: 600px) {
-    #novacool-chat-panel {
-        width: 92vw;
-        height: 82vh;
-        bottom: 90px;
-        right: 4vw;
-    }
-}
+.me { text-align: right; margin: 6px 0; }
+.bot { text-align: left; margin: 6px 0; }

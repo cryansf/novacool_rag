@@ -1,35 +1,50 @@
-/* ===========================================
-   NOVACOOL FIRE-GLOW CHAT WIDGET LOADER
-=========================================== */
 (function () {
-    // Inject styles
-    const style = document.createElement("link");
-    style.rel = "stylesheet";
-    style.href = "https://novacool-rag.onrender.com/static/widget.css";
-    document.head.appendChild(style);
+  const bubble = document.createElement("div");
+  bubble.id = "novacool-bubble";
+  bubble.innerHTML = `<img src="https://novacool.com/wp-content/uploads/2024/06/novacool-fire-logo.png"
+                        style="width:52px; height:52px; border-radius:50%;">`;
+  document.body.appendChild(bubble);
 
-    // Bubble + container with iframe
-    const container = document.createElement("div");
-    container.id = "novacool-widget";
-    container.innerHTML = `
-        <div id="novacool-bubble">
-            <img src="https://novacool.com/wp-content/uploads/2024/06/novacool-fire-logo.png"
-                 alt="Novacool"
-                 style="width:42px;height:42px;border-radius:50%;" />
-        </div>
-        <div id="novacool-chatbox">
-            <iframe id="novacool-iframe"
-                src="https://novacool-rag.onrender.com/static/chat.html"
-                frameborder="0"
-                allow="clipboard-write; microphone">
-            </iframe>
-        </div>
-    `;
-    document.body.appendChild(container);
+  const box = document.createElement("div");
+  box.id = "novacool-chat-box";
+  box.innerHTML = `
+    <div id="nc-header">
+      <span>Novacool AI Assistant</span>
+      <button id="nc-close">×</button>
+    </div>
+    <div id="nc-body"></div>
+    <input id="nc-input" type="text" placeholder="Ask a question…">
+  `;
+  document.body.appendChild(box);
 
-    // Load UI logic
-    const script = document.createElement("script");
-    script.src = "https://novacool-rag.onrender.com/static/chat-ui.js";
-    script.defer = true;
-    document.body.appendChild(script);
+  let open = false;
+
+  bubble.onclick = () => {
+    open = !open;
+    box.style.display = open ? "flex" : "none";
+    document.getElementById("nc-input").focus();
+  };
+
+  document.getElementById("nc-close").onclick = () => {
+    open = false;
+    box.style.display = "none";
+  };
+
+  document.getElementById("nc-input").addEventListener("keydown", async (e) => {
+    if (e.key === "Enter") {
+      let q = e.target.value.trim();
+      if (!q) return;
+      e.target.value = "";
+      document.getElementById("nc-body").innerHTML += `<div class="me">${q}</div>`;
+
+      const r = await fetch("https://novacool-rag.onrender.com/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question: q })
+      });
+      const json = await r.json();
+      document.getElementById("nc-body").innerHTML += `<div class="bot">${json.answer}</div>`;
+      document.getElementById("nc-body").scrollTop = 999999;
+    }
+  });
 })();
