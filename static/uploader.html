@@ -1,54 +1,123 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Novacool Uploader</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Novacool Uploader Dashboard</title>
+
   <style>
-    body { font-family: Arial, sans-serif; background:#f4f4f4; padding: 20px; }
-    h1 { color:#7a0000; }
-    #status { margin-top: 20px; white-space: pre-wrap; }
-    .btn { background:#7a0000; padding:10px; color:#fff; border:none; cursor:pointer; }
+    body {
+      font-family: system-ui, sans-serif;
+      background: #f7fafc;
+      margin: 0;
+      padding: 40px;
+      color: #111;
+      text-align: center;
+    }
+    h1 {
+      color: #7a0000;
+      margin-bottom: 18px;
+    }
+    #upload-box {
+      background: #ffffff;
+      padding: 22px;
+      border-radius: 10px;
+      width: 420px;
+      margin: 0 auto;
+      box-shadow: 0 0 14px rgba(0,0,0,0.18);
+    }
+    input[type="file"] {
+      margin-top: 12px;
+      font-size: 15px;
+    }
+    button {
+      background: #7a0000;
+      border: none;
+      color: white;
+      padding: 11px 20px;
+      font-size: 15px;
+      border-radius: 6px;
+      margin-top: 16px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #a80000;
+    }
+    #status {
+      margin-top: 18px;
+      font-size: 16px;
+      font-weight: bold;
+    }
+    #reindex-status {
+      margin-top: 10px;
+      font-size: 15px;
+      font-weight: bold;
+    }
   </style>
+
 </head>
 <body>
-  <h1>📂 Novacool File Uploader</h1>
 
-  <input id="file-input" type="file" multiple>
-  <button class="btn" onclick="upload()">Upload</button>
+  <h1>📁 Novacool Knowledge Base Uploader</h1>
 
-  <br><br>
-  <button class="btn" onclick="reindex()">Reindex Knowledge Base</button>
+  <div id="upload-box">
+    <p>Upload PDF, DOCX, or TXT files</p>
+    <input type="file" id="file-input" multiple />
+    <button onclick="upload()">Upload Files</button>
+    <div id="status"></div>
 
-  <h2>Uploaded Files</h2>
-  <pre id="files"></pre>
+    <hr style="margin: 28px 0;">
+    <button onclick="reindex()">Reindex Knowledge Base</button>
+    <div id="reindex-status"></div>
+  </div>
 
-  <div id="status"></div>
+<script>
+function upload() {
+  const files = document.getElementById("file-input").files;
+  const status = document.getElementById("status");
 
-  <script>
-    async function refreshFiles() {
-      const r = await fetch("/files");
-      const json = await r.json();
-      document.getElementById("files").textContent =
-        json.files.length ? json.files.join("\n") : "None yet";
-    }
+  if (!files.length) {
+    status.innerText = "⚠ No files selected.";
+    status.style.color = "red";
+    return;
+  }
 
-    async function upload() {
-      const files = document.getElementById("file-input").files;
-      if (!files.length) return alert("Choose files first");
+  status.innerText = "⏳ Uploading...";
+  status.style.color = "#cc6600";
 
-      const fd = new FormData();
-      for (let f of files) fd.append("files", f);
+  const formData = new FormData();
+  for (let f of files) formData.append("files", f);
 
-      const r = await fetch("/upload", { method: "POST", body: fd });
-      document.getElementById("status").textContent = (await r.json()).message;
-      refreshFiles();
-    }
+  fetch("/upload", { method: "POST", body: formData })
+    .then(res => res.json())
+    .then(data => {
+      status.innerText = "✔ " + data.message;
+      status.style.color = "green";
+    })
+    .catch(() => {
+      status.innerText = "⚠ Upload error";
+      status.style.color = "red";
+    });
+}
 
-    async function reindex() {
-      const r = await fetch("/reindex", { method: "POST" });
-      document.getElementById("status").textContent = (await r.json()).message;
-    }
 
-    refreshFiles();
-  </script>
+function reindex() {
+  const status = document.getElementById("reindex-status");
+  status.innerText = "⏳ Reindexing…";
+  status.style.color = "#cc6600";
+
+  fetch("/reindex", { method: "POST" })
+    .then(res => res.json())
+    .then(data => {
+      status.innerText = "✔ " + data.message;
+      status.style.color = "green";
+    })
+    .catch(() => {
+      status.innerText = "⚠ Reindex error";
+      status.style.color = "red";
+    });
+}
+</script>
+
 </body>
 </html>
