@@ -1,104 +1,113 @@
 import os
-import numpy as np
-import pandas as pd
-import faiss
-import openai
-from sentence_transformers import SentenceTransformer
-from glob import glob
 import fitz  # PyMuPDF
-from docx import Document
+import pandas as pd
+from sentence_transformers import SentenceTransformer
+import numpy as np
+import faiss
+from glob import glob
+import openai
 
 UPLOAD_DIR = "uploads"
 DATA_DIR = "data"
 EMBEDDINGS_FILE = os.path.join(DATA_DIR, "embeddings.index")
 METADATA_FILE = os.path.join(DATA_DIR, "metadata.csv")
-
-os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(DATA_DIR, exist_ok=True)
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
 
 
-# -------------------- EXTRACT TEXT --------------------
-def extract_text(file_path):
-    ext = file_path.lower()
-
-    if ext.endswith(".pdf"):
-        text = ""
-        with fitz.open(file_path) as pdf:
-            for page in pdf:
-                text += page.get_text()
-        return text
-
-    elif ext.endswith(".docx"):
-        doc = Document(file_path)
-        return "\n".join(p.text for p in doc.paragraphs)
-
-    elif ext.endswith(".txt"):
-        with open(file_path, "r", errors="ignore") as f:
-            return f.read()
-
-    return ""
-
-
-# -------------------- REINDEX --------------------
-def run_reindex():
+# ==========================================
+# 🔁 REINDEX EVERYTHING
+# ==========================================
+def reindex_all():
     files = glob(os.path.join(UPLOAD_DIR, "*"))
     if not files:
-        return "⚠️ No files found in uploads — please upload first."
+        return "⚠️ No uploaded files found."
 
-    chunks = []
+    docs = []
     sources = []
 
     for file in files:
-        text = extract_text(file)
-        if text:
-            chunks.append(text)
+        try:
+            text = extract_text(file)
+            docs.append(text)
             sources.append(os.path.basename(file))
+        except:
+            continue
 
-    if not chunks:
-        return "⚠️ Uploaded files could not be read."
+    if not docs:
+        return "⚠️ Could not extract text from uploaded files."
 
-    embeddings = embedding_model.encode(chunks).astype("float32")
+    embeddings = embedding_model.encode(docs).astype("float32")
+
     index = faiss.IndexFlatL2(embeddings.shape[1])
     index.add(embeddings)
     faiss.write_index(index, EMBEDDINGS_FILE)
 
-    df = pd.DataFrame({"text": chunks, "source": sources})
+    df = pd.DataFrame({"text": docs, "source": sources})
     df.to_csv(METADATA_FILE, index=False)
 
-    return f"Reindex complete — {len(chunks)} documents processed."
+    return f"✔ Reindex complete — {len(docs)} files processed."
 
 
-# -------------------- RAG RETRIEVAL + GENERATION --------------------
-def answer_query(question):
-    if not os.path.exists(EMBEDDINGS_FILE) or not os.path.exists(METADATA_FILE):
-        return "⚠️ No indexed documents found — upload and reindex first."
+# ==========================================
+# 🔍 SEARCH + ANSWER
+# ==========================================
+def search(question):
+    try:
+        if not os.path.exists(EMBEDDINGS_FILE) or not os.path.exists(METADATA_FILE):
+            return {"answer": "⚠️ No indexed documents — please upload and reindex."}
 
-    df = pd.read_csv(METADATA_FILE)
-    index = faiss.read_index(EMBEDDINGS_FILE)
+        df = pd.read_csv(METADATA_FILE)
+        index = faiss.read_index(EMBEDDINGS_FILE)
 
-    q_emb = embedding_model.encode(question).astype("float32")
-    distances, idx = index.search(np.expand_dims(q_emb, 0), top_k=5)
+        q_emb = embedding_model.encode(question).astype("float32")
+        distances, idx = index.search(np.expand_dims(q_emb, 0), 5)
 
-    context = "\n\n".join(df.iloc[i]["text"] for i in idx[0] if 0 <= i < len(df))
-    sources = ", ".join(df.iloc[i]["source"] for i in idx[0] if 0 <= i < len(df))
+        results = []
+        for i in idx[0]:
+            if 0 <= i < len(df):
+                results.append(df.iloc[i]["text"])
 
-    prompt = f"""
-You are Novacool UEF’s AI firefighting expert. Use ONLY the context below.
+        context = "\n\n".join(results)
+        prompt = f"Use ONLY the context below to answer.\n\nContext:\n{context}\n\nQuestion: {question}"
 
-Context:
-{context}
+        response = openai.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}]
+        )
+        answer = response.choices[0].message.content.strip()
 
-Question: {question}
+        return {"answer": answer}
 
-If an answer cannot be confirmed by the context, say:
-"⚠️ I do not have indexed material to answer that yet."
-"""
+    except Exception as e:
+        return {"error": str(e)}
 
-    key = os.getenv("OPENAI_API_KEY", "")
-    response = openai.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt}]
-    )
-    return response.choices[0].message.content + f"\n\n📌 Sources: {sources}"
+
+# ==========================================
+# 🔽 SUPPORTED FILE TYPES
+# ==========================================
+def extract_text(file):
+    name = file.lower()
+    if name.endswith(".pdf"):
+        return extract_pdf(file)
+    if name.endswith(".docx"):
+        return extract_docx(file)
+    if name.endswith(".txt"):
+        return open(file, "r", errors="ignore").read()
+    return ""
+
+
+def extract_pdf(path):
+    text = ""
+    with fitz.open(path) as pdf:
+        for page in pdf:
+            text += page.get_text()
+    return text
+
+
+def extract_docx(path):
+    from docx import Document
+    doc = Document(path)
+    return "\n".join(p.text for p in doc.paragraphs)
