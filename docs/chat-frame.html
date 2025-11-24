@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
   <title>Novacool AI Chat</title>
 
- <script src="chat-ui.js"></script>
+  <!-- Load chat UI script AFTER DOM loads -->
+  <script src="chat-ui.js" defer></script>
 
   <style>
     html, body {
@@ -20,7 +20,8 @@
 </head>
 
 <body>
-  <div id="chat-mount"></div>
+  <!-- The widget will mount here -->
+  <div id="novacool-chat-container"></div>
 
   <script>
     document.addEventListener("DOMContentLoaded", () => {
@@ -29,9 +30,10 @@
           backendBaseUrl: "https://novacool-rag.onrender.com",
           title: "Novacool AI"
         });
+      } else {
+        console.error("initNovacoolChatWidget missing — chat-ui.js not loaded");
       }
     });
   </script>
 </body>
 </html>
-
