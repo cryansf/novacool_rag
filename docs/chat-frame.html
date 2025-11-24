@@ -1,47 +1,34 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Novacool Chat Frame</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Novacool AI Chat</title>
 
-<style>
-  html, body {
-    margin: 0;
-    padding: 0;
-    width: 100%;
-    height: 100%;
-    overflow: hidden;
-    background: transparent;
-  }
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: transparent;
+    }
 
-  #novacool-chat-container {
-    position: relative !important;
-    width: 100% !important;
-    height: 100% !important;
-    max-width: 420px;
-    max-height: 620px;
-    margin: 0 auto;
-  }
-
-  /* force inner widget to fit panel instead of full page */
-  #novacool-chat-container * {
-    max-width: 100% !important;
-    box-sizing: border-box !important;
-  }
-</style>
+    iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      background: transparent;
+    }
+  </style>
 </head>
 
 <body>
-  <div id="novacool-chat-container"></div>
-
-  <script src="https://cryansf.github.io/novacool_rag/docs/chat-ui.js"></script>
-  <script>
-    window.addEventListener("DOMContentLoaded", () => {
-      window.initNovacoolChatWidget({
-        containerId: "novacool-chat-container"
-      });
-    });
-  </script>
+  <!-- Just show your real chat page from Render -->
+  <iframe
+    src="https://novacool-rag.onrender.com/chat"
+    title="Novacool AI Chat"
+  ></iframe>
 </body>
 </html>
