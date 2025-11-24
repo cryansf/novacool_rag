@@ -1,48 +1,40 @@
-(function () {
-    const panel = document.createElement("div");
-    panel.id = "novacool-chat-panel";
-    panel.innerHTML = `
-        <span id="novacool-close">✖</span>
-        <iframe id="novacool-frame" src="https://novacool-rag.onrender.com/static/chat.html"></iframe>
-    `;
-    document.body.appendChild(panel);
+function initNovacoolChatWidget({ containerId }) {
+  const container = document.getElementById(containerId);
 
-    const bubble = document.getElementById("novacool-bubble");
-    const closeBtn = document.getElementById("novacool-close");
-    const iframe = document.getElementById("novacool-frame");
+  const frame = document.createElement("iframe");
+  frame.src = "https://novacool-rag.onrender.com/chat";
+  frame.style.cssText = `
+    width: 100%;
+    height: 100%;
+    border: none;
+    background: transparent;
+  `;
 
-    let isOpen = false;
+  container.appendChild(frame);
 
-    bubble.addEventListener("click", () => {
-        isOpen = !isOpen;
-        panel.classList.toggle("open");
+  // Auto-scroll to latest answer
+  window.addEventListener("message", (e) => {
+    if (e.data?.action === "scroll") {
+      frame.contentWindow.postMessage({ action: "scroll" }, "*");
+    }
+  });
 
-        if (isOpen) {
-            iframe.contentWindow.postMessage({ action: "focus" }, "*");
-        }
-    });
+  // Forward typed question → backend
+  window.addEventListener("message", async (e) => {
+    if (e.data?.action === "ask") {
+      const question = e.data.question;
 
-    closeBtn.addEventListener("click", () => {
-        isOpen = false;
-        panel.classList.remove("open");
-    });
+      const response = await fetch("https://novacool-rag.onrender.com/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question })
+      });
 
-    // 🔥 LISTEN for questions coming from chat.html
-    window.addEventListener("message", async (e) => {
-        if (e.data?.action === "ask") {
-            const question = e.data.question;
-
-            const response = await fetch("https://novacool-rag.onrender.com/chat", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ question })
-            });
-
-            const result = await response.json();
-            iframe.contentWindow.postMessage(
-                { action: "response", answer: result.answer },
-                "*"
-            );
-        }
-    });
-})();
+      const result = await response.json();
+      frame.contentWindow.postMessage(
+        { action: "response", answer: result.answer },
+        "*"
+      );
+    }
+  });
+}
