@@ -6,30 +6,33 @@
 
   <title>Novacool AI Chat</title>
 
-  <!-- Load chat widget UI -->
-  <script src="/static/chat-ui.js"></script>
+  <!-- Load chat-ui.js from absolute URL (not /static) -->
+  <script src="https://novacool-rag.onrender.com/static/chat-ui.js"></script>
 
   <style>
-    body {
+    html, body {
       margin: 0;
       padding: 0;
       background: transparent;
       overflow: hidden;
+      font-family: system-ui, sans-serif;
     }
   </style>
 </head>
 
 <body>
-  <div id="novacool-chat-container"></div>
+  <div id="chat-mount"></div>
 
+  <!-- CSP-safe init (no inline handler, no event attributes) -->
   <script>
-    // Initialize inside iframe
-    window.addEventListener("DOMContentLoaded", function () {
+    document.addEventListener("DOMContentLoaded", () => {
       if (typeof window.initNovacoolChatWidget === "function") {
         window.initNovacoolChatWidget({
           backendBaseUrl: "https://novacool-rag.onrender.com",
           title: "Novacool AI"
         });
+      } else {
+        console.error("chat-ui.js not loaded");
       }
     });
   </script>
