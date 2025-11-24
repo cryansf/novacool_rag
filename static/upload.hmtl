@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Novacool AI — Document Uploader</title>
+<style>
+body {
+    font-family: system-ui, sans-serif;
+    background: #0d1b2a;
+    color: white;
+    margin: 0;
+    padding: 40px;
+}
+h1 {
+    margin-bottom: 12px;
+}
+#box {
+    background: #1b263b;
+    padding: 24px;
+    border-radius: 12px;
+    max-width: 580px;
+}
+input {
+    margin-top: 10px;
+}
+button {
+    margin-top: 14px;
+    padding: 10px 22px;
+    border: none;
+    border-radius: 6px;
+    background: #d00000;
+    color: white;
+    cursor: pointer;
+}
+#status {
+    margin-top: 16px;
+    font-size: 16px;
+}
+#file-list {
+    margin-top: 18px;
+    padding-left: 0;
+}
+#file-list li {
+    list-style: none;
+    background: #243447;
+    margin-bottom: 6px;
+    padding: 6px;
+    border-radius: 4px;
+    font-size: 14px;
+}
+</style>
+</head>
+
+<body>
+<h1>📁 Novacool Knowledge Base — Uploader</h1>
+<div id="box">
+    <input id="upload-input" type="file" multiple /><br>
+    <button onclick="uploadFiles()">Upload</button>
+    <button onclick="reindex()">Reindex</button>
+    <div id="status"></div>
+    <ul id="file-list"></ul>
+</div>
+
+<script>
+const API = "https://novacool-rag.onrender.com";
+
+async function uploadFiles() {
+    const input = document.getElementById("upload-input");
+    if (!input.files.length) return alert("Choose files first.");
+
+    const formData = new FormData();
+    for (const f of input.files) formData.append("files", f);
+
+    const r = await fetch(`${API}/upload`, { method: "POST", body: formData });
+    const j = await r.json();
+    document.getElementById("status").textContent = j.message || JSON.stringify(j);
+
+    loadFiles();
+}
+
+async function reindex() {
+    const r = await fetch(`${API}/reindex`, { method: "POST" });
+    const j = await r.json();
+    document.getElementById("status").textContent = j.message || JSON.stringify(j);
+}
+
+async function loadFiles() {
+    const r = await fetch(`${API}/files`);
+    const j = await r.json();
+    const list = document.getElementById("file-list");
+    list.innerHTML = "";
+    j.files.forEach(f => {
+        const li = document.createElement("li");
+        li.textContent = f;
+        list.appendChild(li);
+    });
+}
+loadFiles();
+</script>
+</body>
+</html>

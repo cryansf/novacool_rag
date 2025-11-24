@@ -1,79 +1,105 @@
 import os
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
-from rag_pipeline import search, reindex_all
+from werkzeug.utils import secure_filename
+
+from rag_pipeline import run_rag_pipeline, reindex_all
 
 app = Flask(__name__)
 CORS(app)
 
-# ----------------------------
-# 🔍 HEALTH CHECK
-# ----------------------------
-@app.route("/health")
-def health():
-    return "OK", 200
-
-
-# ----------------------------
-# 🤖 CHAT ENDPOINT
-# ----------------------------
-@app.route("/chat", methods=["POST"])
-def chat_api():
-    try:
-        data = request.get_json(silent=True) or {}
-        question = data.get("question", "").strip()
-
-        if not question:
-            return jsonify({"answer": "⚠️ Please enter a question."})
-
-        chunks = search(question)  # <<< IMPORTANT — no top_k parameter
-        answer = chunks.get("answer", None)
-        error = chunks.get("error", None)
-
-        if error:
-            return jsonify({"answer": f"⚠️ Backend error:\n{error}"})
-
-        return jsonify({"answer": answer})
-    except Exception as e:
-        return jsonify({"answer": f"⚠️ Fatal backend error:\n{str(e)}"})
-
-
-# ----------------------------
-# 📤 UPLOAD FILES
-# ----------------------------
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+
+# ==========================
+# 🔥  CHAT UI  (GET)
+# ==========================
+@app.route("/chat", methods=["GET"])
+def chat_ui():
+    """
+    Load chat page for browser (used by widget iframe)
+    """
+    return render_template("chat.html")
+
+
+# ==========================
+# 🤖  CHAT API (POST)
+# ==========================
+@app.route("/chat", methods=["POST"])
+def chat_api():
+    """
+    Accepts a user question and returns an AI answer
+    """
+    data = request.json
+    question = data.get("question", "").strip()
+
+    if not question:
+        return jsonify({"answer": "I didn't receive a question."})
+
+    answer = run_rag_pipeline(question)
+    return jsonify({"answer": answer})
+
+
+# ==========================
+# 📁  PRIVATE UPLOADER PAGE (GET)
+# ==========================
+@app.route("/uploader", methods=["GET"])
+def uploader_page():
+    """
+    Admin-only dashboard to upload and reindex files
+    """
+    return render_template("upload.html")
+
+
+# ==========================
+# ⬆  FILE UPLOAD HANDLER (POST)
+# ==========================
 @app.route("/upload", methods=["POST"])
-def upload_route():
-    if "file" not in request.files:
-        return jsonify({"message": "No file uploaded"}), 400
+def upload_files():
+    """
+    Upload PDFs, DOCX, TXT, HTML, etc. and store in persistent uploads folder
+    """
+    if "files" not in request.files:
+        return jsonify({"status": "No files received"})
 
-    file = request.files["file"]
-    save_path = os.path.join(UPLOAD_DIR, file.filename)
-    file.save(save_path)
-    return jsonify({"message": f"Uploaded: {file.filename}"})
+    files = request.files.getlist("files")
+    saved = []
+
+    for f in files:
+        filename = secure_filename(f.filename)
+        save_path = os.path.join(UPLOAD_DIR, filename)
+        f.save(save_path)
+        saved.append(filename)
+
+    return jsonify({"status": f"{len(saved)} files uploaded", "files": saved})
 
 
-# ----------------------------
-# 🔁 REINDEX DOCUMENTS
-# ----------------------------
+# ==========================
+# 🔄  REINDEX KNOWLEDGE BASE (POST)
+# ==========================
 @app.route("/reindex", methods=["POST"])
-def reindex_route():
+def reindex():
+    """
+    Rebuild FAISS + embeddings from all uploaded files
+    """
     try:
-        msg = reindex_all()
-        return jsonify({"message": msg})
+        count = reindex_all()
+        return jsonify({"status": f"Reindex complete — {count} documents processed"})
     except Exception as e:
-        return jsonify({"message": f"Reindex error: {str(e)}"}), 500
+        return jsonify({"status": f"Reindex failed: {str(e)}"}), 500
 
 
-# ----------------------------
-# 🔗 STATIC FILES (chat UI)
-# ----------------------------
-@app.route("/static/<path:filename>")
-def static_files(filename):
-    return send_from_directory("static", filename)
+# ==========================
+# ❤️  HEALTH CHECK
+# ==========================
+@app.route("/health", methods=["GET"])
+def health():
+    return jsonify({"status": "OK"})
 
 
+# ==========================
+# 🚀  MAIN
+# ==========================
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
