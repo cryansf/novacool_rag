@@ -1,53 +1,369 @@
-#novacool-bubble {
-  position: fixed;
-  right: 26px;
-  bottom: 26px;
-  width: 60px;
-  height: 60px;
-  cursor: pointer;
-  background: #7a0000;
-  border-radius: 50%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  box-shadow: 0 0 18px rgba(255,0,0,.6);
+/* widget.css */
+
+/* ============================================================
+   GLOBAL BODY (inside chat.html iframe)
+============================================================ */
+.nc-body {
+  margin: 0;
+  padding: 0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: radial-gradient(circle at top, #1d2a3b 0%, #060b12 45%, #020309 100%);
+  color: #f5f7fb;
 }
 
-#novacool-chat-box {
-  position: fixed;
-  right: 26px;
-  bottom: 100px;
-  width: 360px;
-  height: 480px;
-  background: white;
-  display: none;
-  flex-direction: column;
-  border-radius: 10px;
-  box-shadow: 0 0 18px rgba(0,0,0,.4);
-  overflow: hidden;
-  z-index: 999999;
-}
-
-#nc-header {
-  background: #7a0000;
-  color: white;
-  padding: 10px;
-  display: flex;
-  justify-content: space-between;
-}
-
-#nc-body {
-  flex: 1;
-  padding: 10px;
-  overflow-y: auto;
-}
-
-#nc-input {
-  border: none;
+/* ============================================================
+   CHAT SHELL (inside iframe)
+============================================================ */
+.nc-chat-shell {
+  box-sizing: border-box;
+  max-width: 900px;
+  height: 100vh;
+  margin: 0 auto;
   padding: 12px;
-  border-top: 1px solid #ccc;
-  outline: none;
+  display: flex;
+  flex-direction: column;
 }
 
-.me { text-align: right; margin: 6px 0; }
-.bot { text-align: left; margin: 6px 0; }
+/* Header inside iframe */
+.nc-chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(224, 12, 12, 0.9), rgba(255, 115, 0, 0.9));
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.55);
+  margin-bottom: 10px;
+}
+
+.nc-chat-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.nc-logo-flare {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: radial-gradient(circle at 30% 30%, #fff3d9 0%, #ff9900 40%, #d00000 80%);
+  box-shadow: 0 0 16px rgba(255, 170, 51, 0.9);
+}
+
+.nc-title-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.nc-name {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.nc-subtitle {
+  font-size: 12px;
+  opacity: 0.88;
+}
+
+/* Header pill (Reindex button in header) */
+.nc-header-pill {
+  border: none;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  background: rgba(6, 12, 20, 0.75);
+  color: #fefefe;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.14);
+  transition: background 0.18s ease, transform 0.12s ease, box-shadow 0.18s ease;
+}
+
+.nc-header-pill:hover {
+  background: rgba(1, 5, 10, 0.95);
+  transform: translateY(-1px);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.24);
+}
+
+/* Messages */
+.nc-messages {
+  flex: 1;
+  border-radius: 14px;
+  background: radial-gradient(circle at top left, #1c2635 0%, #050911 50%, #020308 100%);
+  padding: 14px 12px;
+  margin-bottom: 10px;
+  overflow-y: auto;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+}
+
+/* Message rows */
+.nc-msg-row {
+  display: flex;
+  margin-bottom: 8px;
+}
+
+.nc-msg-row-user {
+  justify-content: flex-end;
+}
+
+.nc-msg-row-assistant {
+  justify-content: flex-start;
+}
+
+/* Message bubbles */
+.nc-msg {
+  max-width: 80%;
+  padding: 8px 10px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.nc-msg-user {
+  background: linear-gradient(135deg, #ff4a32, #ffb347);
+  color: #141414;
+  border-bottom-right-radius: 4px;
+  box-shadow: 0 6px 16px rgba(255, 90, 60, 0.4);
+}
+
+.nc-msg-assistant {
+  background: rgba(15, 24, 40, 0.98);
+  color: #f5f7fb;
+  border-bottom-left-radius: 4px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Input row */
+.nc-input-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 14px;
+  background: rgba(10, 16, 28, 0.96);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.04), 0 12px 24px rgba(0, 0, 0, 0.75);
+}
+
+.nc-input {
+  flex: 1;
+  resize: none;
+  border-radius: 10px;
+  border: none;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  color: #f5f7fb;
+  background: rgba(6, 11, 20, 0.98);
+  outline: none;
+  min-height: 40px;
+  max-height: 120px;
+}
+
+.nc-input::placeholder {
+  color: rgba(213, 219, 238, 0.7);
+}
+
+.nc-send-btn {
+  border: none;
+  border-radius: 999px;
+  padding: 9px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  background: linear-gradient(135deg, #ff4d3d, #ffb347);
+  color: #181818;
+  box-shadow: 0 7px 18px rgba(255, 115, 76, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
+}
+
+.nc-send-btn:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.08);
+}
+
+.nc-send-btn:active {
+  transform: translateY(1px);
+  box-shadow: 0 3px 9px rgba(255, 115, 76, 0.5);
+}
+
+/* Footer status line */
+.nc-footer-status {
+  margin-top: 5px;
+  font-size: 11px;
+  color: rgba(220, 227, 247, 0.78);
+  text-align: left;
+}
+
+/* ============================================================
+   BUBBLE + OVERLAY (on novacool.com parent page)
+============================================================ */
+.nc-chat-bubble {
+  position: fixed;
+  bottom: 22px;
+  right: 22px;
+  width: 56px;
+  height: 56px;
+  border-radius: 999px;
+  cursor: pointer;
+  z-index: 999999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+}
+
+.nc-chat-bubble-glow {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(circle, rgba(255, 104, 57, 0.9), rgba(208, 0, 0, 0.95));
+  filter: blur(9px);
+  opacity: 0.8;
+  animation: nc-pulse 1.6s ease-in-out infinite;
+}
+
+.nc-chat-bubble-core {
+  position: relative;
+  z-index: 2;
+  width: 46px;
+  height: 46px;
+  border-radius: inherit;
+  background: radial-gradient(circle at 30% 20%, #fff7e0 0%, #ff8f3a 35%, #d00000 80%);
+  box-shadow: 0 0 0 2px rgba(255, 244, 228, 0.5), 0 10px 22px rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nc-chat-bubble-logo {
+  font-size: 24px;
+  filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.6));
+}
+
+/* Overlay */
+.nc-chat-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 12, 0.5);
+  z-index: 999998;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  padding: 12px;
+  box-sizing: border-box;
+}
+
+.nc-chat-overlay.nc-hidden {
+  display: none;
+}
+
+/* Chat window within overlay */
+.nc-chat-window {
+  width: 420px;
+  height: 600px;
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 18px;
+  background: radial-gradient(circle at top left, #192234 0%, #05090f 55%, #010306 100%);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.9);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Overlay header */
+.nc-overlay-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  background: linear-gradient(135deg, #e40f0f, #ff8a2a);
+  color: #fff;
+}
+
+.nc-overlay-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nc-overlay-logo {
+  font-size: 18px;
+}
+
+.nc-overlay-text {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.nc-overlay-close {
+  border: none;
+  background: transparent;
+  color: #fff;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 0 6px;
+  line-height: 1;
+}
+
+/* Overlay body */
+.nc-overlay-body {
+  flex: 1;
+  background: transparent;
+}
+
+.nc-chat-iframe {
+  border: none;
+  width: 100%;
+  height: 100%;
+}
+
+/* ============================================================
+   Responsive behavior (Hybrid C)
+   - Desktop: popup in corner
+   - Mobile: full-screen
+============================================================ */
+@media (max-width: 768px) {
+  .nc-chat-overlay {
+    align-items: stretch;
+    justify-content: stretch;
+    padding: 0;
+  }
+
+  .nc-chat-window {
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
+  }
+
+  .nc-chat-shell {
+    height: 100vh;
+    padding: 8px;
+  }
+}
+
+/* ============================================================
+   Animation
+============================================================ */
+@keyframes nc-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+}
