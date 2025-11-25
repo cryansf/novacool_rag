@@ -1,39 +1,37 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Novacool AI — Upload Docs</title>
+  <meta charset="UTF-8">
+  <title>Novacool Uploader</title>
+  <link rel="stylesheet" href="widget.css">
   <style>
-    body { font-family: Arial; margin: 40px; }
-    #log { white-space: pre-line; margin-top: 20px; }
+    body { font-family: system-ui; padding: 30px; background: #f2f5f9; }
+    h2 { margin-bottom: 16px; }
+    #log { margin-top: 16px; white-space: pre-wrap; background: #fff; padding: 14px; border-radius: 8px; }
   </style>
 </head>
 <body>
-  <h2>📄 Upload PDFs / DOCXs to the Knowledge Base</h2>
-
+  <h2>📄 Upload Novacool Documents</h2>
   <input type="file" id="fileInput" multiple>
   <button onclick="upload()">Upload</button>
 
+  <h2>🔁 Reindex</h2>
+  <button onclick="reindex()">Reindex All</button>
+
   <div id="log"></div>
 
-<script>
-async function upload() {
-  const files = document.getElementById("fileInput").files;
-  if (!files.length) return alert("Pick files first!");
-
-  const log = document.getElementById("log");
-  log.textContent = "Uploading...\n";
-
-  for (const file of files) {
-    const data = new FormData();
-    data.append("file", file);
-
-    const res = await fetch("/upload", { method: "POST", body: data });
-    const txt = await res.text();
-    log.textContent += file.name + ": " + txt + "\n";
-  }
-
-  log.textContent += "\n➡️ Upload complete — click Reindex next!";
-}
-</script>
+  <script>
+    async function upload() {
+      const files = document.getElementById("fileInput").files;
+      const formData = new FormData();
+      for (const f of files) formData.append("files", f);
+      const r = await fetch("/upload", { method: "POST", body: formData });
+      document.getElementById("log").textContent = JSON.stringify(await r.json(), null, 2);
+    }
+    async function reindex() {
+      const r = await fetch("/reindex", { method: "POST" });
+      document.getElementById("log").textContent = JSON.stringify(await r.json(), null, 2);
+    }
+  </script>
 </body>
 </html>
