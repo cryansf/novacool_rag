@@ -1,29 +1,109 @@
-/* ===========================================
-   NOVACOOL FIRE-GLOW CHAT WIDGET LOADER
-=========================================== */
+// widget-loader.js
+// Injects a glowing bubble + overlay that loads /static/chat.html in an iframe.
+// Hybrid behavior: popup on desktop, full-screen on mobile.
+
 (function () {
+  const HOST = "https://novacool-rag.onrender.com";
+  const CSS_URL = HOST + "/static/widget.css";
+  const CHAT_URL = HOST + "/static/chat.html";
 
-    // Inject CSS
-    const style = document.createElement("link");
-    style.rel = "stylesheet";
-    style.href = "https://novacool-rag.onrender.com/static/widget.css";
-    document.head.appendChild(style);
+  function injectCssOnce() {
+    if (document.querySelector('link[data-novacool-widget="true"]')) {
+      return;
+    }
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = CSS_URL;
+    link.setAttribute("data-novacool-widget", "true");
+    document.head.appendChild(link);
+  }
 
-    // Bubble HTML
-    const widget = document.createElement("div");
-    widget.id = "novacool-widget";
-    widget.innerHTML = `
-        <div id="novacool-bubble">
-            <img src="https://us-wbe-img2.gr-cdn.com/user/123a38dc-e766-4012-98fe-ef769251a075/552046ab-dad4-498c-8cf3-9f1f4abffded.png"
-                 alt="Novacool"
-                 style="width: 48px; height: 48px; border-radius: 50%;" />
-        </div>
+  function createBubble() {
+    if (document.getElementById("nc-chat-bubble")) return;
+
+    const bubble = document.createElement("div");
+    bubble.id = "nc-chat-bubble";
+    bubble.className = "nc-chat-bubble";
+
+    bubble.innerHTML = `
+      <div class="nc-chat-bubble-glow"></div>
+      <div class="nc-chat-bubble-core">
+        <span class="nc-chat-bubble-logo">🔥</span>
+      </div>
     `;
-    document.body.appendChild(widget);
 
-    // Load chat UI script
-    const s = document.createElement("script");
-    s.src = "https://novacool-rag.onrender.com/static/chat-ui.js";
-    s.defer = true;
-    document.body.appendChild(s);
+    bubble.addEventListener("click", function () {
+      toggleOverlay(true);
+    });
+
+    document.body.appendChild(bubble);
+  }
+
+  function createOverlay() {
+    if (document.getElementById("nc-chat-overlay")) return;
+
+    const overlay = document.createElement("div");
+    overlay.id = "nc-chat-overlay";
+    overlay.className = "nc-chat-overlay nc-hidden";
+
+    overlay.innerHTML = `
+      <div class="nc-chat-window">
+        <div class="nc-overlay-header">
+          <div class="nc-overlay-title">
+            <span class="nc-overlay-logo">🔥</span>
+            <span class="nc-overlay-text">
+              Novacool AI Assistant
+            </span>
+          </div>
+          <button type="button" class="nc-overlay-close" aria-label="Close chat">
+            ×
+          </button>
+        </div>
+        <div class="nc-overlay-body">
+          <iframe
+            id="nc-chat-iframe"
+            src="${CHAT_URL}"
+            class="nc-chat-iframe"
+            title="Novacool AI Chat"
+          ></iframe>
+        </div>
+      </div>
+    `;
+
+    const closeBtn = overlay.querySelector(".nc-overlay-close");
+    closeBtn.addEventListener("click", function () {
+      toggleOverlay(false);
+    });
+
+    overlay.addEventListener("click", function (e) {
+      // Click outside the chat window closes overlay
+      if (e.target === overlay) {
+        toggleOverlay(false);
+      }
+    });
+
+    document.body.appendChild(overlay);
+  }
+
+  function toggleOverlay(show) {
+    const overlay = document.getElementById("nc-chat-overlay");
+    if (!overlay) return;
+    if (show) {
+      overlay.classList.remove("nc-hidden");
+    } else {
+      overlay.classList.add("nc-hidden");
+    }
+  }
+
+  function init() {
+    injectCssOnce();
+    createOverlay();
+    createBubble();
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
 })();
