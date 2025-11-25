@@ -1,51 +1,47 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Novacool AI</title>
-  <style>
-    body {
-      font-family: system-ui, sans-serif;
-      background: #0e1824;
-      margin: 0;
-      padding: 0;
-      color: white;
-    }
-    #messages {
-      height: calc(100vh - 120px);
-      overflow-y: auto;
-      padding: 20px;
-    }
-    #input-area {
-      display: flex;
-      padding: 15px;
-      background: #111c2c;
-      border-top: 2px solid #d00000;
-    }
-    #userMessage {
-      flex: 1;
-      padding: 12px;
-      font-size: 16px;
-      border-radius: 8px;
-      border: none;
-    }
-    button {
-      margin-left: 10px;
-      padding: 12px 18px;
-      border: none;
-      border-radius: 8px;
-      background: #e60000;
-      color: white;
-      cursor: pointer;
-    }
-  </style>
+  <meta charset="UTF-8" />
+  <title>Novacool AI Assistant</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- All styling comes from widget.css -->
+  <link rel="stylesheet" href="widget.css" />
 </head>
-<body>
-  <div id="messages"></div>
-  <div id="input-area">
-    <input id="userMessage" type="text" placeholder="Ask anything about Novacool…">
-    <button onclick="sendMessage()">Send</button>
+<body class="nc-body">
+  <div class="nc-chat-shell">
+    <div class="nc-chat-header">
+      <div class="nc-chat-title">
+        <div class="nc-logo-flare"></div>
+        <div class="nc-title-text">
+          <div class="nc-name">Novacool AI Assistant</div>
+          <div class="nc-subtitle">Ask anything about Novacool UEF & foam operations</div>
+        </div>
+      </div>
+      <!-- Optional in-frame reindex button (for power users) -->
+      <button id="nc-reindex-btn" class="nc-header-pill" type="button">
+        Reindex
+      </button>
+    </div>
+
+    <div id="nc-messages" class="nc-messages"></div>
+
+    <div class="nc-input-row">
+      <textarea
+        id="nc-user-input"
+        class="nc-input"
+        rows="1"
+        placeholder="Ask a question about Novacool, foam application, or fire scenarios..."
+      ></textarea>
+      <button id="nc-send-btn" class="nc-send-btn" type="button">
+        Send
+      </button>
+    </div>
+
+    <div id="nc-footer-status" class="nc-footer-status">
+      🔄 Tip: Use the uploader page to add new PDFs, then click Reindex.
+    </div>
   </div>
+
   <script src="chat-ui.js"></script>
 </body>
 </html>
